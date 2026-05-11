@@ -25,8 +25,18 @@
   --block-rule: #161616;
 }
 
-* { box-sizing: border-box; }
-html, body { height: 100%; margin: 0; padding: 0; background: var(--bg); color: var(--fg); }
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--fg);
+  overscroll-behavior: none;
+}
 body {
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   overscroll-behavior: none;
@@ -35,22 +45,20 @@ body {
 }
 
 #app {
-  position: fixed;
-  left: 0;
-  right: 0;
-  top: var(--vv-top, 0);
   height: var(--vv-h, 100dvh);
-  display: grid;
-  grid-template-rows: 1fr auto;
-  transition: height 60ms ease-out, top 60ms ease-out;
-}
-@supports not (height: 100dvh) {
-  #app { height: var(--vv-h, 100vh); }
+  display: flex;
+  flex-direction: column;
+  transition: height 60ms ease-out;
 }
 
 /* ----- view: transcript or xterm ---------------------------------------- */
 
-#view { position: relative; overflow: hidden; background: var(--bg); }
+#view {
+  background: var(--bg);
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
 
 /* Floating "scroll to latest" affordance. Lives inside #view so it
    anchors above the bottom panel, on the right edge — out of the way
@@ -78,7 +86,9 @@ body {
   opacity: 0;
   transform: translateY(6px);
   pointer-events: none;
-  transition: opacity 120ms ease, transform 120ms ease;
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
 }
@@ -87,27 +97,38 @@ body {
   transform: translateY(0);
   pointer-events: auto;
 }
-#scroll-bottom:active { background: var(--key-press); }
+#scroll-bottom:active {
+  background: var(--key-press);
+}
 
 #transcript {
   height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: max(env(safe-area-inset-top), 8px) max(env(safe-area-inset-right), 8px) 12px max(env(safe-area-inset-left), 8px);
+  padding: max(env(safe-area-inset-top), 2px)
+    max(env(safe-area-inset-right), 2px) 2px max(env(safe-area-inset-left), 2px);
   scroll-behavior: smooth;
 }
 
 #xterm-host {
   position: absolute;
   inset: 0;
-  padding: max(env(safe-area-inset-top), 8px) max(env(safe-area-inset-right), 8px) 0 max(env(safe-area-inset-left), 8px);
+  padding: max(env(safe-area-inset-top), 2px)
+    max(env(safe-area-inset-right), 2px) 0 max(env(safe-area-inset-left), 2px);
   overflow-x: auto;
   overflow-y: hidden;
+  height: 100%;
 }
-#xterm-host[hidden] { display: none; }
+#xterm-host[hidden] {
+  display: none;
+}
 
-.block { padding: 6px 0 14px 0; }
-.block + .block { border-top: 1px solid var(--block-rule); }
+.block {
+  padding: 6px 0 14px 0;
+}
+.block + .block {
+  border-top: 1px solid var(--block-rule);
+}
 .block-header {
   display: flex;
   justify-content: space-between;
@@ -117,10 +138,15 @@ body {
   letter-spacing: 0.04em;
   padding: 4px 2px;
 }
-.block-status.status-ok  { color: var(--ok); }
-.block-status.status-err { color: var(--err); }
+.block-status.status-ok {
+  color: var(--ok);
+}
+.block-status.status-err {
+  color: var(--err);
+}
 .block[data-state="running"] .block-status::before {
-  content: "▶ "; color: var(--accent);
+  content: "▶ ";
+  color: var(--accent);
 }
 .block-command {
   font-size: 14px;
@@ -128,7 +154,10 @@ body {
   white-space: pre-wrap;
   word-break: break-word;
 }
-.block-command::before { content: "› "; color: var(--accent); }
+.block-command::before {
+  content: "› ";
+  color: var(--accent);
+}
 .block-output {
   margin: 0;
   padding: 0 2px;
@@ -139,12 +168,31 @@ body {
   word-break: break-word;
   color: var(--fg);
 }
-.block-output .line { min-height: 1em; }
+.block-output .line {
+  min-height: 1em;
+}
 
-#xterm-host .xterm-helper-textarea { pointer-events: auto !important; }
-.xterm { padding: 0; }
-.xterm-viewport { background: var(--bg) !important; }
-.xterm .xterm-cursor { animation: none; }
+#xterm-host .xterm-helper-textarea {
+  pointer-events: auto !important;
+}
+.xterm {
+  padding: 0;
+}
+.xterm-viewport {
+  background: var(--bg) !important;
+}
+.xterm .xterm-cursor {
+  animation: none;
+}
+.terminal.xterm,
+.xterm-screen {
+  height: 100% !important;
+}
+
+.xterm-rows {
+  height: 100% !important;
+  overflow-y: scroll;
+}
 
 /* ----- bottom panel ---------------------------------------------------- */
 
@@ -163,13 +211,16 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin: 8px max(env(safe-area-inset-right), 8px) 0 max(env(safe-area-inset-left), 8px);
+  margin: 8px max(env(safe-area-inset-right), 8px) 0
+    max(env(safe-area-inset-left), 8px);
   padding: 8px;
   background: rgba(14, 14, 14, 0.96);
   border: 1px solid var(--tray-border);
   border-radius: 8px;
 }
-#overflow[hidden] { display: none; }
+#overflow[hidden] {
+  display: none;
+}
 .overflow-actions {
   display: flex;
   align-items: center;
@@ -195,9 +246,12 @@ body {
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
 }
-.overflow-keys button:active { background: var(--key-press); }
+.overflow-keys button:active {
+  background: var(--key-press);
+}
 
-#view-toggle, #leave {
+#view-toggle,
+#leave {
   height: 30px;
   padding: 0 12px;
   background: transparent;
@@ -210,10 +264,22 @@ body {
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
 }
-#view-toggle { color: var(--fg); border-color: var(--tray-border); background: var(--key-bg); }
-#view-toggle[data-active="raw"] { color: var(--accent); border-color: var(--accent); }
-#view-toggle:active { background: var(--key-press); }
-#leave:active { background: var(--key-press); color: var(--danger); }
+#view-toggle {
+  color: var(--fg);
+  border-color: var(--tray-border);
+  background: var(--key-bg);
+}
+#view-toggle[data-active="raw"] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+#view-toggle:active {
+  background: var(--key-press);
+}
+#leave:active {
+  background: var(--key-press);
+  color: var(--danger);
+}
 
 /* ----- action tray (composer + soft keys + joystick) ------------------ */
 /* Single panel: dark gradient with subtle grid texture, textarea on the
@@ -230,7 +296,8 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px max(env(safe-area-inset-right), 10px) max(env(safe-area-inset-bottom), 10px) max(env(safe-area-inset-left), 10px);
+  padding: 10px max(env(safe-area-inset-right), 10px)
+    max(env(safe-area-inset-bottom), 10px) max(env(safe-area-inset-left), 10px);
   background-image: linear-gradient(125deg, #323232 16%, #1d1d1d 100%);
   border-radius: 10px 10px 0 0;
   position: relative;
@@ -244,8 +311,16 @@ body {
   border-radius: 10px;
   padding: 15px;
   background-image:
-    repeating-linear-gradient(0deg,  rgba(255,255,255,0.02) 0 1px, transparent 1px 20px),
-    repeating-linear-gradient(90deg, rgba(255,255,255,0.02) 0 1px, transparent 1px 20px),
+    repeating-linear-gradient(
+      0deg,
+      rgba(255, 255, 255, 0.02) 0 1px,
+      transparent 1px 20px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.02) 0 1px,
+      transparent 1px 20px
+    ),
     linear-gradient(to right, #161616, #141414);
   display: flex;
   flex-direction: column;
@@ -270,7 +345,9 @@ body {
   margin: 0;
   transition: opacity 280ms ease;
 }
-.action-textarea::placeholder { color: rgba(255,255,255,0.46); }
+.action-textarea::placeholder {
+  color: rgba(255, 255, 255, 0.46);
+}
 
 /* ----- recording overlay ---------------------------------------------
    While recording, the pane lifts out of the tray's flex flow and
@@ -280,7 +357,9 @@ body {
    so the user's hold-finger never moves. Keys/actions collapse out;
    the textarea and interim transcript get larger so dictated text is
    easy to read. */
-.action-tray[data-recording="true"] { justify-content: flex-end; }
+.action-tray[data-recording="true"] {
+  justify-content: flex-end;
+}
 .action-tray[data-recording="true"] .action-pane {
   position: absolute;
   z-index: 5;
@@ -315,7 +394,9 @@ body {
 }
 .action-tray[data-recording="true"] .action-keys,
 .action-tray[data-recording="true"] .action-actions,
-.action-tray[data-recording="true"] .action-close { display: none; }
+.action-tray[data-recording="true"] .action-close {
+  display: none;
+}
 
 .waveform-canvas {
   position: absolute;
@@ -376,15 +457,31 @@ body {
     transform 400ms ease-in-out,
     background-color 120ms ease;
 }
-.action-keys .action-chip:nth-child(1) { transition-delay: 0ms,   0ms,   0ms; }
-.action-keys .action-chip:nth-child(2) { transition-delay: 50ms,  50ms,  0ms; }
-.action-keys .action-chip:nth-child(3) { transition-delay: 100ms, 100ms, 0ms; }
-.action-keys .action-chip:nth-child(4) { transition-delay: 150ms, 150ms, 0ms; }
-.action-chip:hover { background: #3a3a3a; }
-.action-chip:active { background: #3a3a3a; }
-.action-chip[aria-expanded="true"] { background: #3a3a3a; }
+.action-keys .action-chip:nth-child(1) {
+  transition-delay: 0ms, 0ms, 0ms;
+}
+.action-keys .action-chip:nth-child(2) {
+  transition-delay: 50ms, 50ms, 0ms;
+}
+.action-keys .action-chip:nth-child(3) {
+  transition-delay: 100ms, 100ms, 0ms;
+}
+.action-keys .action-chip:nth-child(4) {
+  transition-delay: 150ms, 150ms, 0ms;
+}
+.action-chip:hover {
+  background: #3a3a3a;
+}
+.action-chip:active {
+  background: #3a3a3a;
+}
+.action-chip[aria-expanded="true"] {
+  background: #3a3a3a;
+}
 
-.action-keys.hidden { pointer-events: none; }
+.action-keys.hidden {
+  pointer-events: none;
+}
 .action-keys.hidden .action-chip {
   opacity: 0;
   transform: translateX(30px) scaleX(0.2);
@@ -417,8 +514,12 @@ body {
     background-color 120ms ease;
   transition-delay: 200ms, 200ms, 0ms;
 }
-.action-actions:hover { background: #3a3a3a; }
-.action-actions:active { background: #3a3a3a; }
+.action-actions:hover {
+  background: #3a3a3a;
+}
+.action-actions:active {
+  background: #3a3a3a;
+}
 .action-actions.hidden {
   opacity: 0;
   transform: scale(0.5);
@@ -446,10 +547,17 @@ body {
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
   cursor: pointer;
-  transition: opacity 200ms ease, transform 200ms ease, background-color 120ms ease;
+  transition:
+    opacity 200ms ease,
+    transform 200ms ease,
+    background-color 120ms ease;
 }
-.action-close:hover { background: #3a3a3a; }
-.action-close:active { background: #3a3a3a; }
+.action-close:hover {
+  background: #3a3a3a;
+}
+.action-close:active {
+  background: #3a3a3a;
+}
 .action-close.hidden {
   opacity: 0;
   transform: scale(0.5);
@@ -484,11 +592,21 @@ body {
   pointer-events: none;
   transition: stroke 90ms ease;
 }
-.joystick-arrow.up    { transform: translate(-50%, -50%) translateY(-34px); }
-.joystick-arrow.down  { transform: translate(-50%, -50%) translateY(34px) rotate(180deg); }
-.joystick-arrow.left  { transform: translate(-50%, -50%) translateX(-38px) rotate(-90deg); }
-.joystick-arrow.right { transform: translate(-50%, -50%) translateX(38px) rotate(90deg); }
-.joystick-arrow[data-active="true"] { stroke: rgba(255, 255, 255, 0.9); }
+.joystick-arrow.up {
+  transform: translate(-50%, -50%) translateY(-34px);
+}
+.joystick-arrow.down {
+  transform: translate(-50%, -50%) translateY(34px) rotate(180deg);
+}
+.joystick-arrow.left {
+  transform: translate(-50%, -50%) translateX(-38px) rotate(-90deg);
+}
+.joystick-arrow.right {
+  transform: translate(-50%, -50%) translateX(38px) rotate(90deg);
+}
+.joystick-arrow[data-active="true"] {
+  stroke: rgba(255, 255, 255, 0.9);
+}
 
 /* The ring is a transparent 50×50 gesture target. The visible puck is
    the .joystick-knob, which carries the gradient border + black core
@@ -520,7 +638,9 @@ body {
   background: linear-gradient(135deg, #2600ff 0%, #7000ff 50%, #2600ff 100%);
   transform: translate(-50%, -50%);
   pointer-events: none;
-  transition: background 220ms ease, box-shadow 220ms ease;
+  transition:
+    background 220ms ease,
+    box-shadow 220ms ease;
 }
 .joystick-ring[data-state="pressed"] .joystick-knob {
   transform: translate(-50%, -50%) scale(0.95);
@@ -530,8 +650,13 @@ body {
   animation: joystickGlow 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 @keyframes joystickGlow {
-  0%, 100% { box-shadow: 0 0 12px 2px rgba(255, 40, 80, 0.45); }
-  50%      { box-shadow: 0 0 22px 7px rgba(255, 80, 110, 0.9); }
+  0%,
+  100% {
+    box-shadow: 0 0 12px 2px rgba(255, 40, 80, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 22px 7px rgba(255, 80, 110, 0.9);
+  }
 }
 
 .joystick-button {
@@ -546,8 +671,12 @@ body {
   pointer-events: none;
   transition: background-color 120ms ease;
 }
-.joystick-ring:hover .joystick-button { background: #111; }
-.joystick-ring:active .joystick-button { background: #161616; }
+.joystick-ring:hover .joystick-button {
+  background: #111;
+}
+.joystick-ring:active .joystick-button {
+  background: #161616;
+}
 
 .joystick-icon {
   width: 25px;
@@ -569,7 +698,9 @@ body {
   z-index: 10;
   padding: 24px;
 }
-#status-overlay[hidden] { display: none; }
+#status-overlay[hidden] {
+  display: none;
+}
 .status-card {
   width: 100%;
   max-width: 360px;
@@ -579,8 +710,18 @@ body {
   padding: 20px;
   text-align: center;
 }
-#status-title { font-size: 16px; letter-spacing: 0.04em; margin-bottom: 8px; color: var(--fg); }
-#status-hint  { font-size: 13px; color: var(--muted); margin-bottom: 16px; line-height: 1.4; }
+#status-title {
+  font-size: 16px;
+  letter-spacing: 0.04em;
+  margin-bottom: 8px;
+  color: var(--fg);
+}
+#status-hint {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 16px;
+  line-height: 1.4;
+}
 #reconnect {
   width: 100%;
   height: 44px;
@@ -593,4 +734,6 @@ body {
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
 }
-#reconnect:active { background: var(--key-press); }
+#reconnect:active {
+  background: var(--key-press);
+}
