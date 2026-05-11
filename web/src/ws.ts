@@ -12,9 +12,13 @@ type OutboundControl =
   | { type: "release-geometry" };
 
 // Inbound control messages. The server pushes geometry on connect and
-// whenever the host resizes.
+// whenever the host resizes. history-start / history-end bracket a
+// stretch of binary frames that carry the older scrollback — the client
+// parses them as a separate stream and prepends the resulting blocks.
 export type InboundControl =
-  | { type: "geometry"; cols: number; rows: number };
+  | { type: "geometry"; cols: number; rows: number }
+  | { type: "history-start" }
+  | { type: "history-end" };
 
 export type Status = "connecting" | "open" | "closed" | "error";
 

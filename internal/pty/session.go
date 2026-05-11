@@ -8,6 +8,7 @@
 package pty
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"os"
@@ -18,10 +19,16 @@ import (
 	cpty "github.com/creack/pty"
 )
 
-// ScrollbackBytes is the size of the ring buffer of recent PTY output that
-// gets replayed to a new client on connect. ~256KB covers a few screens of
-// dense output without bloating memory.
-const ScrollbackBytes = 256 * 1024
+// ScrollbackBytes is the size of the ring buffer of recent PTY output kept
+// in memory. ReplayBytes caps how much of that is actually shipped to a
+// new client on connect — initial paint on mobile parses every replayed
+// byte through the block pipeline, so a smaller replay means a faster
+// first frame. The ring stays a few screens deep for safety, the replay
+// stays tight.
+const (
+	ScrollbackBytes = 64 * 1024
+	ReplayBytes     = 32 * 1024
+)
 
 // GeometryListener is notified whenever the PTY is resized. Listeners
 // run synchronously under the session lock — they must be fast.
@@ -92,7 +99,7 @@ func Start(name string, args []string, cols, rows uint16, extraEnv []string) (*S
 // pump reads PTY output forever, into the ring buffer and out to clients.
 // Local mirroring is handled by AttachLocal via a Tee on the receiving end.
 func (s *Session) pump() {
-	buf := make([]byte, 32*1024)
+	buf := make([]byte, 64*1024)
 	for {
 		n, err := s.tty.Read(buf)
 		if n > 0 {
@@ -160,22 +167,21 @@ func (s *Session) AttachLocal(localIn io.Reader, localOut io.Writer) {
 	}()
 }
 
-// Subscribe registers a remote client. The returned Client's Output channel
-// yields PTY bytes (scrollback replayed first, then live). Close the client
-// via Detach. If writer is true, the caller must already hold the writer
-// lock from TryAcquireRemote.
-func (s *Session) Subscribe(writer bool) *Client {
-	c := &Client{out: make(chan []byte, 256), isWriter: writer, sess: s}
+// Subscribe registers a remote client and returns the initial replay
+// split into tail (recent, parsed straight into the live stream so the
+// client can render fast) and history (the older portion, to be
+// streamed after the tail so it can be prepended once the main view is
+// already on screen). The Client's Output channel carries live PTY
+// bytes only — the caller writes the tail/history to the wire itself.
+// If writer is true, the caller must already hold the writer lock from
+// TryAcquireRemote.
+func (s *Session) Subscribe(writer bool) (c *Client, tail, history []byte) {
+	c = &Client{out: make(chan []byte, 256), isWriter: writer, sess: s}
 	s.mu.Lock()
 	s.clients[c] = struct{}{}
-	scrollback := s.ring.snapshot()
+	history, tail = s.ring.snapshotSplit(ReplayBytes)
 	s.mu.Unlock()
-	if len(scrollback) > 0 {
-		// Push as one big initial frame so the client can render before
-		// receiving live data.
-		c.out <- scrollback
-	}
-	return c
+	return c, tail, history
 }
 
 // Detach removes a client and releases the writer lock if it held one.
@@ -355,4 +361,20 @@ func (r *ring) snapshot() []byte {
 	copy(out, r.buf[r.w:])
 	copy(out[len(r.buf)-r.w:], r.buf[:r.w])
 	return out
+}
+
+// snapshotSplit splits the ring into (head, tail) where tail is at most
+// maxTailBytes from the end aligned to the next newline after the cut,
+// and head is everything before. The cut never lands mid-line, so
+// neither side starts on a partial escape sequence.
+func (r *ring) snapshotSplit(maxTailBytes int) (head, tail []byte) {
+	snap := r.snapshot()
+	if len(snap) <= maxTailBytes {
+		return nil, snap
+	}
+	cut := len(snap) - maxTailBytes
+	if i := bytes.IndexByte(snap[cut:], '\n'); i >= 0 {
+		cut += i + 1
+	}
+	return snap[:cut], snap[cut:]
 }

@@ -5,6 +5,7 @@
 
 import { Terminal } from "@xterm/xterm";
 import { WebLinksAddon } from "@xterm/addon-web-links";
+import { WebglAddon } from "@xterm/addon-webgl";
 import "@xterm/xterm/css/xterm.css";
 
 const DEFAULT_FONT_SIZE = 14;
@@ -31,7 +32,7 @@ export function createTerm(): Term {
     lineHeight: LINE_HEIGHT,
     letterSpacing: 0,
     allowProposedApi: true,
-    scrollback: 5000,
+    scrollback: 1000,
     theme: {
       background: "#0b0b0b",
       foreground: "#d7d7d7",
@@ -66,6 +67,16 @@ export function createTerm(): Term {
       if (mounted === host) return;
       term.open(host);
       mounted = host;
+      // WebGL renderer: must load after open() (it needs the host's
+      // canvas context). Falls back to the default DOM renderer if the
+      // context is lost or unavailable.
+      try {
+        const webgl = new WebglAddon();
+        webgl.onContextLoss(() => webgl.dispose());
+        term.loadAddon(webgl);
+      } catch {
+        /* no WebGL → stay on the DOM renderer */
+      }
     },
     setGeometry: (cols, rows) => {
       if (!mounted) return;

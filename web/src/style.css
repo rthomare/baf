@@ -125,6 +125,14 @@ body {
 
 .block {
   padding: 6px 0 14px 0;
+  /* Off-screen blocks skip layout/paint until they near the viewport.
+     `contain-intrinsic-size: auto 200px` reserves a 200px placeholder
+     on first encounter; once the block is rendered the browser caches
+     its real height. `contain: content` keeps appends inside a running
+     block from re-flowing blocks above it. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 200px;
+  contain: content;
 }
 .block + .block {
   border-top: 1px solid var(--block-rule);
@@ -568,24 +576,23 @@ body {
 
 .joystick-rail {
   position: relative;
-  flex: 0 0 100px;
-  width: 100px;
-  height: 110px;
+  flex: 0 0 78px;
+  width: 78px;
+  height: 92px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-/* Native SVG aspect is 26:13 (wide triangle pointing up). Rendering at
-   29×13 preserves shape; we offset each arrow from the joystick center
-   and rotate around that center, so left/right stay properly shaped
-   without letterboxing. */
+/* Native SVG aspect is 26:13. Shrunk to 20×9 and pulled tighter against
+   the knob so the rail can be narrower — the composer to the left
+   gets the reclaimed width. */
 .joystick-arrow {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 29px;
-  height: 13px;
+  width: 20px;
+  height: 9px;
   fill: none;
   stroke: rgba(255, 255, 255, 0.1);
   stroke-width: 1;
@@ -593,16 +600,16 @@ body {
   transition: stroke 90ms ease;
 }
 .joystick-arrow.up {
-  transform: translate(-50%, -50%) translateY(-34px);
+  transform: translate(-50%, -50%) translateY(-28px);
 }
 .joystick-arrow.down {
-  transform: translate(-50%, -50%) translateY(34px) rotate(180deg);
+  transform: translate(-50%, -50%) translateY(28px) rotate(180deg);
 }
 .joystick-arrow.left {
-  transform: translate(-50%, -50%) translateX(-38px) rotate(-90deg);
+  transform: translate(-50%, -50%) translateX(-29px) rotate(-90deg);
 }
 .joystick-arrow.right {
-  transform: translate(-50%, -50%) translateX(38px) rotate(90deg);
+  transform: translate(-50%, -50%) translateX(29px) rotate(90deg);
 }
 .joystick-arrow[data-active="true"] {
   stroke: rgba(255, 255, 255, 0.9);

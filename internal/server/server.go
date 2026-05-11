@@ -211,13 +211,13 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// TryAcquireRemote succeeded — release it.
 		// We do this via a temporary subscribe/detach with the writer flag.
-		c := s.cfg.Session.Subscribe(true)
+		c, _, _ := s.cfg.Session.Subscribe(true)
 		s.cfg.Session.Detach(c)
 		return
 	}
 	defer conn.Close(websocket.StatusNormalClosure, "bye")
 
-	client := s.cfg.Session.Subscribe(true)
+	client, replayTail, replayHistory := s.cfg.Session.Subscribe(true)
 	defer s.cfg.Session.Detach(client)
 	// If this client set a geometry override, drop it when they leave so
 	// the host's terminal isn't stuck at mobile dimensions.
@@ -251,6 +251,25 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		writeGeometry(c, r)
 	})
 	defer cancelGeom()
+
+	// Initial replay, sent before starting the live drain so its frames
+	// land first on the wire. Order: tail (binary) → history-start (text)
+	// → history (binary) → history-end (text). The client builds its
+	// blocks from the tail straight away and then prepends the older
+	// history blocks when history-end arrives. Live PTY bytes broadcast
+	// during this window buffer in client.Output() and flush right after.
+	if len(replayTail) > 0 {
+		_ = conn.Write(ctx, websocket.MessageBinary, replayTail)
+	}
+	if len(replayHistory) > 0 {
+		if payload, err := json.Marshal(ctrlMsg{Type: "history-start"}); err == nil {
+			_ = conn.Write(ctx, websocket.MessageText, payload)
+		}
+		_ = conn.Write(ctx, websocket.MessageBinary, replayHistory)
+		if payload, err := json.Marshal(ctrlMsg{Type: "history-end"}); err == nil {
+			_ = conn.Write(ctx, websocket.MessageText, payload)
+		}
+	}
 
 	// PTY → WS (binary frames)
 	go func() {

@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef } from "react";
+import { memo, useEffect, useLayoutEffect, useReducer, useRef } from "react";
 import {
   initialBlocksState,
   makeBlockController,
@@ -26,15 +26,48 @@ export function BlockTranscript() {
     controllerRef.current?.sync(state);
   }, [state]);
 
-  // Pin to bottom whenever new content arrives — but only if the user
-  // was already near the bottom (might be reading earlier history).
+  // Scroll bookkeeping. wasAtBottom tracks whether the user is near
+  // the bottom *before* a state change lands; updated continuously
+  // from real scroll events so we can preserve intent. lastHeight and
+  // lastFirstId let us tell appends from prepends after a layout pass
+  // (history blocks arrive after the tail and prepend to the front).
+  const wasAtBottomRef = useRef(true);
+  const lastHeightRef = useRef(0);
+  const lastFirstIdRef = useRef<number | null>(null);
+
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
-    const dist = host.scrollHeight - host.scrollTop - host.clientHeight;
-    if (dist < AUTOSCROLL_SLACK_PX) {
-      host.scrollTop = host.scrollHeight;
+    const onScroll = () => {
+      const dist = host.scrollHeight - host.scrollTop - host.clientHeight;
+      wasAtBottomRef.current = dist < AUTOSCROLL_SLACK_PX;
+    };
+    host.addEventListener("scroll", onScroll, { passive: true });
+    return () => host.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useLayoutEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    const newHeight = host.scrollHeight;
+    const newFirstId = state.blocks[0]?.id ?? null;
+    const isPrepend =
+      lastFirstIdRef.current !== null &&
+      newFirstId !== null &&
+      newFirstId !== lastFirstIdRef.current;
+
+    if (wasAtBottomRef.current) {
+      host.scrollTop = newHeight;
+    } else if (isPrepend) {
+      // Older blocks arrived above the user's current viewport. Add
+      // the height delta to scrollTop so the content they were
+      // reading stays where it was on screen.
+      const delta = newHeight - lastHeightRef.current;
+      if (delta > 0) host.scrollTop = host.scrollTop + delta;
     }
+
+    lastHeightRef.current = newHeight;
+    lastFirstIdRef.current = newFirstId;
   }, [state.blocks]);
 
   return (
@@ -46,7 +79,11 @@ export function BlockTranscript() {
   );
 }
 
-function Block({ block }: { block: BlockRecord }) {
+// Memoized so that a streaming append to the running block doesn't
+// re-render every completed block above it. Block identity is stable
+// (reducer returns the same record when its fields don't change), so
+// the default shallow prop comparison short-circuits cleanly.
+const Block = memo(function Block({ block }: { block: BlockRecord }) {
   return (
     <article className="block" data-state={block.state}>
       <header className="block-header">
@@ -63,9 +100,9 @@ function Block({ block }: { block: BlockRecord }) {
       </pre>
     </article>
   );
-}
+});
 
-function LineRow({ line }: { line: Line }) {
+const LineRow = memo(function LineRow({ line }: { line: Line }) {
   return (
     <div className="line">
       {line.segments.map((seg, i) => (
@@ -73,7 +110,7 @@ function LineRow({ line }: { line: Line }) {
       ))}
     </div>
   );
-}
+});
 
 function statusClass(b: BlockRecord): string {
   if (b.state === "running") return "";

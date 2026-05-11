@@ -49,6 +49,7 @@ export type BlockAction =
   | { type: "finalize"; exit?: number; perf: number }
   | { type: "lines"; id: number; lines: Line[] }
   | { type: "note-command"; text: string }
+  | { type: "prepend-history"; blocks: BlockRecord[] }
   | { type: "reset" };
 
 export function reduceBlocks(state: BlocksState, action: BlockAction): BlocksState {
@@ -88,6 +89,14 @@ export function reduceBlocks(state: BlocksState, action: BlockAction): BlocksSta
     }
     case "note-command":
       return { ...state, pendingCommand: action.text };
+    case "prepend-history": {
+      if (action.blocks.length === 0) return state;
+      // History blocks have negative ids; live blocks have positive
+      // ones. The cap keeps the most recent (live) blocks if the total
+      // exceeds MAX_BLOCKS, since capBlocks slices from the tail.
+      const blocks = capBlocks([...action.blocks, ...state.blocks]);
+      return { ...state, blocks };
+    }
     case "reset":
       return initialBlocksState;
   }
@@ -115,6 +124,7 @@ function capBlocks(blocks: BlockRecord[]): BlockRecord[] {
 export interface BlockController {
   handle(ev: StreamEvent): void;
   noteSentCommand(text: string): void;
+  prependHistory(blocks: BlockRecord[]): void;
   reset(): void;
   sync(state: BlocksState): void;
 }
@@ -201,11 +211,15 @@ export function makeBlockController(dispatch: (a: BlockAction) => void): BlockCo
     mirror = { ...mirror, pendingCommand: text.replace(/\r$/, "") };
   }
 
+  function prependHistory(blocks: BlockRecord[]) {
+    dispatch({ type: "prepend-history", blocks });
+  }
+
   function reset() {
     renderers.clear();
     dispatch({ type: "reset" });
     mirror = { currentId: null, inPrompt: false, pendingCommand: null, nextId: 1 };
   }
 
-  return { handle, noteSentCommand, reset, sync };
+  return { handle, noteSentCommand, prependHistory, reset, sync };
 }
