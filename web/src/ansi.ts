@@ -1,25 +1,23 @@
-// Tiny ANSI byte-stream renderer for the block transcript.
-//
-// We feed it the `bytes` events from the StreamParser and it produces
-// styled DOM. It handles enough of the protocol to make typical shell
+// ANSI byte-stream → styled-line producer. Pure data: each feed() updates
+// an internal `lines` array of `{id, segments}` records that React can
+// render directly. Handles enough of the protocol to make typical shell
 // output legible:
 //
-//   - UTF-8 text         → spans with the current style
+//   - UTF-8 text         → segments with the active style
 //   - SGR (CSI ... m)    → updates the active style
 //   - \n                 → new line
 //   - \r                 → reset cursor to column 0 (used by progress bars)
 //   - \b                 → backspace one column
-//   - CSI K              → clear from cursor to end of line
-//   - CSI 2K             → clear entire line
+//   - CSI K              → clear from cursor to end of line (mode 0/2)
 //
-// Anything else (cursor moves, hyperlinks, …) is silently dropped — if
-// a tool uses those, it's probably also using the alternate screen, in
+// Anything else (cursor moves, hyperlinks, …) is silently dropped — if a
+// tool uses those it's almost certainly using the alternate screen, in
 // which case the client has already flipped to raw mode.
 
 const ESC = 0x1b;
 const decoder = new TextDecoder("utf-8", { fatal: false });
 
-interface Style {
+export interface AnsiStyle {
   fg?: string;
   bg?: string;
   bold?: boolean;
@@ -27,6 +25,16 @@ interface Style {
   underline?: boolean;
   dim?: boolean;
   inverse?: boolean;
+}
+
+export interface Segment {
+  text: string;
+  style: AnsiStyle;
+}
+
+export interface Line {
+  id: number;
+  segments: Segment[];
 }
 
 const SGR_COLORS: Record<number, string> = {
@@ -37,28 +45,30 @@ const SGR_COLORS: Record<number, string> = {
 };
 
 export class AnsiRenderer {
-  // Each child of `host` is a line element (<div class="line">). The
-  // last child is the line currently being written to.
-  private host: HTMLElement;
-  private currentLine!: HTMLElement;
-  private cursorCol = 0;       // logical column within currentLine
-  private style: Style = {};
+  private linesArr: Line[] = [];
+  private cursorCol = 0;
+  private style: AnsiStyle = {};
   // Partial UTF-8 bytes held over a chunk boundary so we don't decode
   // half a character.
   private utf8Pending: Uint8Array = new Uint8Array(0);
-  // Buffer for an in-progress ANSI sequence (we only care about SGR and
-  // line-clear here; everything else routes through StreamParser).
+  // Buffer for an in-progress ANSI sequence (we only act on SGR and
+  // line-clear; the StreamParser absorbs the rest).
   private seq: number[] = [];
   private inEsc = false;
+  private nextId = 1;
 
-  constructor(host: HTMLElement) {
-    this.host = host;
+  constructor() {
     this.newLine();
   }
 
+  // Current lines. The array reference changes whenever feed() touches a
+  // line; unchanged Line records retain identity so React can keep keys
+  // stable across renders.
+  get lines(): Line[] {
+    return this.linesArr;
+  }
+
   feed(bytes: Uint8Array): void {
-    // Walk byte-by-byte but accumulate runs of text bytes to decode
-    // efficiently. UTF-8 continuation bytes >=0x80 are fine in runs.
     let i = 0;
     while (i < bytes.length) {
       const b = bytes[i];
@@ -70,7 +80,6 @@ export class AnsiRenderer {
           this.seq = [];
           this.inEsc = false;
         } else if (this.seq.length > 64) {
-          // Runaway, abandon
           this.seq = [];
           this.inEsc = false;
         }
@@ -101,12 +110,10 @@ export class AnsiRenderer {
         continue;
       }
       if (b < 0x20 && b !== 0x09) {
-        // Drop other control chars (we keep \t at 0x09).
         i++;
         continue;
       }
 
-      // Text run: walk until the next control byte.
       const start = i;
       while (i < bytes.length) {
         const c = bytes[i];
@@ -118,7 +125,6 @@ export class AnsiRenderer {
   }
 
   private writeText(bytes: Uint8Array): void {
-    // Combine with any pending UTF-8 continuation bytes from last feed.
     let buf = bytes;
     if (this.utf8Pending.length > 0) {
       const merged = new Uint8Array(this.utf8Pending.length + bytes.length);
@@ -127,7 +133,6 @@ export class AnsiRenderer {
       buf = merged;
       this.utf8Pending = new Uint8Array(0);
     }
-    // If the tail is mid-codepoint, hold it for next feed.
     const cont = trailingContinuation(buf);
     if (cont > 0) {
       this.utf8Pending = buf.subarray(buf.length - cont);
@@ -138,50 +143,44 @@ export class AnsiRenderer {
     this.placeText(text);
   }
 
-  // placeText writes text at the current cursor column. If the cursor is
-  // mid-line (because of a preceding \r), we overwrite the existing
-  // content from that column.
+  // Writes text at the cursor. Append fast-path if the cursor is at end;
+  // otherwise rebuilds the line, replacing [col, col+text.length). Style
+  // continuity for surrounding text is approximated as plain — matches
+  // the previous DOM implementation, good enough for progress-bar redraws.
   private placeText(text: string): void {
-    // Fast path: cursor at end of line — append a new span.
-    const line = this.currentLine;
-    const lineText = line.textContent ?? "";
+    const last = this.last();
+    const lineText = lineToText(last);
     if (this.cursorCol === lineText.length) {
-      const span = document.createElement("span");
-      applyStyle(span, this.style);
-      span.textContent = text;
-      line.appendChild(span);
+      const next: Line = {
+        id: last.id,
+        segments: [...last.segments, { text, style: this.style }],
+      };
+      this.replaceLast(next);
       this.cursorCol += text.length;
       return;
     }
-    // Overwrite path: rebuild the line. Replace the substring
-    // [cursorCol, cursorCol+text.length) with `text`, keeping anything
-    // after intact. Style continuity is approximated by collapsing to
-    // a single span — good enough for progress-bar rewrites.
     const before = lineText.slice(0, this.cursorCol);
     const after = lineText.slice(this.cursorCol + text.length);
-    line.replaceChildren();
-    if (before) {
-      const s = document.createElement("span");
-      s.textContent = before;
-      line.appendChild(s);
-    }
-    const s = document.createElement("span");
-    applyStyle(s, this.style);
-    s.textContent = text;
-    line.appendChild(s);
-    if (after) {
-      const t = document.createElement("span");
-      t.textContent = after;
-      line.appendChild(t);
-    }
+    const segments: Segment[] = [];
+    if (before) segments.push({ text: before, style: {} });
+    segments.push({ text, style: this.style });
+    if (after) segments.push({ text: after, style: {} });
+    this.replaceLast({ id: last.id, segments });
     this.cursorCol += text.length;
   }
 
   private newLine(): void {
-    this.currentLine = document.createElement("div");
-    this.currentLine.className = "line";
-    this.host.appendChild(this.currentLine);
+    const line: Line = { id: this.nextId++, segments: [] };
+    this.linesArr = [...this.linesArr, line];
     this.cursorCol = 0;
+  }
+
+  private last(): Line {
+    return this.linesArr[this.linesArr.length - 1];
+  }
+
+  private replaceLast(line: Line): void {
+    this.linesArr = [...this.linesArr.slice(0, -1), line];
   }
 
   private applyCSI(): void {
@@ -191,64 +190,54 @@ export class AnsiRenderer {
     const params = paramStr.split(";").map((p) => (p === "" ? 0 : parseInt(p, 10)));
 
     if (final === 0x6d /* m */) {
-      // SGR
       this.applySGR(params);
     } else if (final === 0x4b /* K */) {
-      // Clear in line. 0 (default): cursor to end. 1: start to cursor. 2: entire line.
+      // Clear in line. 0: cursor to end. 2: entire line.
       const mode = params[0] ?? 0;
-      const lineText = this.currentLine.textContent ?? "";
+      const last = this.last();
       if (mode === 0) {
-        // Truncate to cursor.
+        const lineText = lineToText(last);
         const keep = lineText.slice(0, this.cursorCol);
-        this.currentLine.replaceChildren();
-        if (keep) {
-          const s = document.createElement("span");
-          s.textContent = keep;
-          this.currentLine.appendChild(s);
-        }
+        const segments: Segment[] = keep ? [{ text: keep, style: {} }] : [];
+        this.replaceLast({ id: last.id, segments });
       } else if (mode === 2) {
-        this.currentLine.replaceChildren();
+        this.replaceLast({ id: last.id, segments: [] });
         this.cursorCol = 0;
       }
     }
-    // Other CSI (cursor moves, etc.) — ignore. TUIs use alt-screen, so
-    // anything cursor-positioning in the main screen is best-effort.
   }
 
-  private applySGR(params: number[]): void {
+  private applySGR(rawParams: number[]): void {
+    const params = rawParams.length === 0 ? [0] : rawParams;
     let i = 0;
-    if (params.length === 0) params = [0];
     while (i < params.length) {
       const p = params[i];
-      if (p === 0) {
-        this.style = {};
-      } else if (p === 1) this.style.bold = true;
-      else if (p === 2) this.style.dim = true;
-      else if (p === 3) this.style.italic = true;
-      else if (p === 4) this.style.underline = true;
-      else if (p === 7) this.style.inverse = true;
-      else if (p === 22) { this.style.bold = false; this.style.dim = false; }
-      else if (p === 23) this.style.italic = false;
-      else if (p === 24) this.style.underline = false;
-      else if (p === 27) this.style.inverse = false;
-      else if (p === 39) this.style.fg = undefined;
-      else if (p === 49) this.style.bg = undefined;
+      if (p === 0) this.style = {};
+      else if (p === 1) this.style = { ...this.style, bold: true };
+      else if (p === 2) this.style = { ...this.style, dim: true };
+      else if (p === 3) this.style = { ...this.style, italic: true };
+      else if (p === 4) this.style = { ...this.style, underline: true };
+      else if (p === 7) this.style = { ...this.style, inverse: true };
+      else if (p === 22) this.style = { ...this.style, bold: false, dim: false };
+      else if (p === 23) this.style = { ...this.style, italic: false };
+      else if (p === 24) this.style = { ...this.style, underline: false };
+      else if (p === 27) this.style = { ...this.style, inverse: false };
+      else if (p === 39) this.style = { ...this.style, fg: undefined };
+      else if (p === 49) this.style = { ...this.style, bg: undefined };
       else if ((p >= 30 && p <= 37) || (p >= 90 && p <= 97)) {
-        this.style.fg = SGR_COLORS[p];
+        this.style = { ...this.style, fg: SGR_COLORS[p] };
       } else if ((p >= 40 && p <= 47) || (p >= 100 && p <= 107)) {
-        this.style.bg = SGR_COLORS[p - 10];
+        this.style = { ...this.style, bg: SGR_COLORS[p - 10] };
       } else if (p === 38 || p === 48) {
-        // 256-colour or RGB: ESC [ 38;5;N m  or  ESC [ 38;2;R;G;B m
-        const target = p === 38 ? "fg" : "bg";
+        const target: "fg" | "bg" = p === 38 ? "fg" : "bg";
         const mode = params[i + 1];
         if (mode === 5) {
-          const idx = params[i + 2];
-          this.style[target] = palette256(idx);
+          this.style = { ...this.style, [target]: palette256(params[i + 2]) };
           i += 3;
           continue;
         } else if (mode === 2) {
           const r = params[i + 2], g = params[i + 3], bl = params[i + 4];
-          this.style[target] = `rgb(${r},${g},${bl})`;
+          this.style = { ...this.style, [target]: `rgb(${r},${g},${bl})` };
           i += 5;
           continue;
         }
@@ -258,23 +247,42 @@ export class AnsiRenderer {
   }
 }
 
-function applyStyle(el: HTMLElement, s: Style): void {
-  if (s.fg) el.style.color = s.fg;
-  if (s.bg) el.style.backgroundColor = s.bg;
-  if (s.bold) el.style.fontWeight = "bold";
-  if (s.italic) el.style.fontStyle = "italic";
-  if (s.underline) el.style.textDecoration = "underline";
-  if (s.dim) el.style.opacity = "0.7";
-  if (s.inverse) {
-    const fg = el.style.color || "var(--fg)";
-    const bg = el.style.backgroundColor || "var(--bg)";
-    el.style.color = bg;
-    el.style.backgroundColor = fg;
-  }
+function lineToText(line: Line): string {
+  let s = "";
+  for (const seg of line.segments) s += seg.text;
+  return s;
 }
 
-// Returns the number of trailing bytes that are part of an in-progress
-// UTF-8 codepoint, so we can hold them over to the next feed.
+// CSS-style props derived from an AnsiStyle. Returned shape is
+// structurally compatible with React.CSSProperties so we don't have to
+// pull React into this otherwise framework-agnostic module.
+export interface SegmentCss {
+  color?: string;
+  backgroundColor?: string;
+  fontWeight?: "bold";
+  fontStyle?: "italic";
+  textDecoration?: "underline";
+  opacity?: number;
+}
+
+export function segmentStyle(s: AnsiStyle): SegmentCss {
+  const out: SegmentCss = {};
+  let fg = s.fg;
+  let bg = s.bg;
+  if (s.inverse) {
+    const tmp = fg ?? "var(--fg)";
+    fg = bg ?? "var(--bg)";
+    bg = tmp;
+  }
+  if (fg) out.color = fg;
+  if (bg) out.backgroundColor = bg;
+  if (s.bold) out.fontWeight = "bold";
+  if (s.italic) out.fontStyle = "italic";
+  if (s.underline) out.textDecoration = "underline";
+  if (s.dim) out.opacity = 0.7;
+  return out;
+}
+
 function trailingContinuation(buf: Uint8Array): number {
   let count = 0;
   for (let i = buf.length - 1; i >= 0 && i >= buf.length - 4; i--) {
@@ -291,7 +299,6 @@ function trailingContinuation(buf: Uint8Array): number {
   return 0;
 }
 
-// xterm 256-colour palette (compact).
 function palette256(n: number): string {
   if (n < 16) {
     const basic = [0, 31, 32, 33, 34, 35, 36, 37, 90, 91, 92, 93, 94, 95, 96, 97];
@@ -303,6 +310,6 @@ function palette256(n: number): string {
   }
   const c = n - 16;
   const r = Math.floor(c / 36), g = Math.floor((c % 36) / 6), b = c % 6;
-  const step = (x: number) => x === 0 ? 0 : 55 + x * 40;
+  const step = (x: number) => (x === 0 ? 0 : 55 + x * 40);
   return `rgb(${step(r)},${step(g)},${step(b)})`;
 }

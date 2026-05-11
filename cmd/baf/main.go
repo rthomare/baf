@@ -147,6 +147,7 @@ func run() error {
 		TLSCert:  cert,
 		Token:    token,
 		UIFS:     webfs.FS(),
+		DevProxy: os.Getenv("BAF_DEV"),
 		Session:  sess,
 	})
 	if err != nil {
@@ -159,7 +160,7 @@ func run() error {
 	// Print the QR + URL to the local terminal *before* raw mode would
 	// have eaten the newlines. We're already in raw mode, so write CRLF
 	// terminators explicitly.
-	printBanner(os.Stdout, url)
+	printBanner(os.Stdout, url, os.Getenv("BAF_DEV"))
 
 	srvErr := make(chan error, 1)
 	go func() { srvErr <- srv.Run(ctx) }()
@@ -201,15 +202,19 @@ func pickPort(ip net.IP, pref int) (int, error) {
 
 // printBanner writes the connection info above the prompt. We're already
 // in raw mode by the time this is called, so use CRLF.
-func printBanner(w io.Writer, url string) {
+func printBanner(w io.Writer, url, devProxy string) {
 	const dim = "\x1b[2m"
 	const reset = "\x1b[0m"
 	const bold = "\x1b[1m"
+	const yellow = "\x1b[33m"
 	fmt.Fprintf(w, "%s┌─ back and forth ─┐%s\r\n", dim, reset)
 	fmt.Fprintf(w, "%s│%s open on your phone\r\n", dim, reset)
 	fmt.Fprintf(w, "%s│%s %s%s%s\r\n", dim, reset, bold, url, reset)
 	fmt.Fprintf(w, "%s│%s (single-use link — token consumed on first scan)\r\n", dim, reset)
 	fmt.Fprintf(w, "%s│%s quit: %sbaf-quit%s, %sexit%s, or Ctrl-D\r\n", dim, reset, bold, reset, bold, reset)
+	if devProxy != "" {
+		fmt.Fprintf(w, "%s│%s %sdev mode%s — UI proxied from %s\r\n", dim, reset, yellow, reset, devProxy)
+	}
 	fmt.Fprintf(w, "%s└──────────────────┘%s\r\n", dim, reset)
 	qr.Print(crlfWriter{w}, url)
 	fmt.Fprint(w, "\r\n")

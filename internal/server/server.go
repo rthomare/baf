@@ -21,6 +21,8 @@ import (
 	"io/fs"
 	"net"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -40,7 +42,8 @@ type Config struct {
 	BindAddr  string          // e.g. "192.168.1.42:8443"
 	TLSCert   tls.Certificate // self-signed, from tlsgen
 	Token     string          // one-time login token (URL ?t=...)
-	UIFS      fs.FS           // embedded web/dist
+	UIFS      fs.FS           // embedded web/dist (production)
+	DevProxy  string          // if non-empty, proxy UI requests here (e.g. "http://localhost:5173") instead of serving UIFS
 	Session   *pty.Session
 	OnFirstClient func()      // optional, called the first time a remote attaches
 }
@@ -135,6 +138,9 @@ func (s *Server) authenticated(r *http.Request) bool {
 }
 
 func (s *Server) staticHandler() http.Handler {
+	if s.cfg.DevProxy != "" {
+		return s.devProxyHandler()
+	}
 	fileServer := http.FileServer(http.FS(s.cfg.UIFS))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !s.authenticated(r) {
@@ -150,6 +156,29 @@ func (s *Server) staticHandler() http.Handler {
 			r.URL.Path = "/"
 		}
 		fileServer.ServeHTTP(w, r)
+	})
+}
+
+// devProxyHandler reverse-proxies UI traffic (and Vite's HMR WebSocket) to a
+// running Vite dev server. Auth is still enforced via the session cookie, and
+// /api/ws is unaffected because it's routed by the mux before the static
+// handler runs. Go's httputil.ReverseProxy handles WebSocket upgrades
+// transparently, which is what makes HMR work end-to-end over our HTTPS
+// listener.
+func (s *Server) devProxyHandler() http.Handler {
+	target, err := url.Parse(s.cfg.DevProxy)
+	if err != nil {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "bad BAF_DEV URL: "+err.Error(), http.StatusInternalServerError)
+		})
+	}
+	proxy := httputil.NewSingleHostReverseProxy(target)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !s.authenticated(r) {
+			http.Error(w, "unauthorized — open the URL from baf's terminal output", http.StatusUnauthorized)
+			return
+		}
+		proxy.ServeHTTP(w, r)
 	})
 }
 

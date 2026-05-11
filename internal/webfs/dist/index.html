@@ -7,99 +7,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>baf</title>
-    <script type="module" crossorigin src="/assets/index-BEOSajie.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-Dg_9L1z5.css">
+    <script type="module" crossorigin src="/assets/index-ClVBBHyt.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-BNJLeOR1.css">
   </head>
   <body>
-    <main id="app">
-      <div id="view">
-        <div id="transcript" aria-label="command transcript"></div>
-        <div id="xterm-host" hidden aria-label="raw terminal"></div>
-        <button
-          id="scroll-bottom"
-          type="button"
-          data-visible="false"
-          aria-label="scroll to latest output"
-          title="scroll to latest"
-        >&darr;</button>
-      </div>
-
-      <div id="bottom-panel">
-        <header id="mode-bar">
-          <div class="mode-bar-spacer"></div>
-          <div class="mode-bar-actions">
-            <button id="view-toggle" type="button" aria-label="toggle terminal view">raw</button>
-            <button id="leave" type="button" aria-label="disconnect from this session">leave</button>
-          </div>
-        </header>
-
-        <div id="overflow" hidden role="menu">
-          <button data-key="ctrl-d">Ctrl-D</button>
-          <button data-key="ctrl-l">Ctrl-L</button>
-          <button data-key="ctrl-z">Ctrl-Z</button>
-          <button data-key="ctrl-r">Ctrl-R</button>
-          <button data-key="ctrl-u">Ctrl-U</button>
-          <button data-key="ctrl-w">Ctrl-W</button>
-          <button data-key="home">Home</button>
-          <button data-key="end">End</button>
-          <button data-key="pageup">PgUp</button>
-          <button data-key="pagedown">PgDn</button>
-        </div>
-
-        <div id="tray" role="toolbar" aria-label="terminal shortcuts">
-          <button data-key="ctrl-c">ctrl-c</button>
-          <button data-key="esc">esc</button>
-          <button data-key="tab">tab</button>
-          <button id="more-toggle" data-key="more" aria-expanded="false" aria-label="more keys">&hellip;</button>
-        </div>
-
-        <!--
-          The input row. Composer pane on the left, joystick on the right.
-          The joystick handles three gestures:
-            tap   → commit draft
-            drag  → arrow key in the dominant direction (auto-repeats)
-            hold  → voice recording; release stops
-        -->
-        <div id="input-row">
-          <div id="composer-pane">
-            <span class="prompt-glyph" aria-hidden="true">&rsaquo;</span>
-            <textarea
-              id="composer"
-              rows="2"
-              enterkeyhint="send"
-              autocomplete="off"
-              autocorrect="off"
-              autocapitalize="off"
-              spellcheck="false"
-              placeholder="draft will show up here…"
-              aria-label="command draft"
-            ></textarea>
-            <div id="interim-line" aria-live="polite"></div>
-          </div>
-
-          <div
-            id="joystick"
-            role="button"
-            tabindex="0"
-            aria-label="tap to submit, drag for arrows, hold for voice"
-            data-state="idle"
-          >
-            <span class="joystick-arrow up"    aria-hidden="true">&uarr;</span>
-            <span class="joystick-arrow down"  aria-hidden="true">&darr;</span>
-            <span class="joystick-arrow left"  aria-hidden="true">&larr;</span>
-            <span class="joystick-arrow right" aria-hidden="true">&rarr;</span>
-            <div id="joystick-knob"></div>
-          </div>
-        </div>
-      </div>
-
-      <div id="status-overlay" hidden role="dialog" aria-modal="true">
-        <div class="status-card">
-          <div id="status-title">Disconnected</div>
-          <div id="status-hint">The baf session is still running on your computer.</div>
-          <button id="reconnect" type="button">Reconnect</button>
-        </div>
-      </div>
-    </main>
+    <div id="root"></div>
   </body>
 </html>

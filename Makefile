@@ -11,9 +11,14 @@ go:
 build: web go
 
 dev:
-	cd web && npm install
-	cd web && npm run dev &
-	go run ./cmd/baf
+	@cd web && npm install
+	@echo "starting vite dev server on :5173"
+	@(cd web && npm run dev -- --port 5173 --strictPort) & \
+		VITE_PID=$$!; \
+		trap "kill $$VITE_PID 2>/dev/null" EXIT INT TERM; \
+		until curl -fsS http://localhost:5173/ >/dev/null 2>&1; do sleep 0.2; done; \
+		echo "vite up; starting baf in BAF_DEV mode"; \
+		BAF_DEV=http://localhost:5173 go run ./cmd/baf
 
 clean:
 	rm -rf baf web/dist web/node_modules

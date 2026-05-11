@@ -215,10 +215,152 @@ flow, now feeding the same composer pipeline.
 - the first prompt's `D;0` is benign noise (precmd fires before the
   first prompt) — the block UI just doesn't render an empty block.
 
+## 2026-05-11 — Joystick + composer replace type/voice tabs
+
+The earlier "type / voice as tabs" and "↑/↓ history buttons in the
+tray" designs are superseded by a single unified input surface:
+
+- A **composer** textarea holds the draft. Enter submits.
+- A **joystick** to the right of the composer carries three gestures:
+  - **tap** — commit the draft (`text + \r`).
+  - **drag** — arrow key in the dominant direction, auto-repeating
+    while held. In block view, ↑/↓ scrub composer history (the shell
+    isn't echoing keys, so PTY-arrow scrubbing wouldn't be visible);
+    in raw view all four arrows go to the PTY.
+  - **hold** — start voice recording; release stops. Transcripts
+    append to the composer so the user can edit before sending. Voice
+    commands ("clear", "newline", …) act on the draft, not the PTY.
+- The **mode bar** carries a `raw` / `block` view toggle and a
+  `leave` button. The overflow that used to hold `disconnect` now
+  holds extra control keys (`Ctrl-D`, `Ctrl-L`, `Ctrl-Z`, …) reached
+  via the `…` button in the tray.
+
+**Why:** Tabs forced an explicit mode choice for what should be one
+continuous flow — start typing, hold to dictate, drag to arrow, tap
+to send. A single gesture surface removes the mode switch entirely
+and frees the bottom panel for one tray of keys instead of two
+visual states. The `leave` button moves into the mode bar because
+disconnecting is a session-level action, not a key.
+
+**Alternatives considered:** Keep separate record button + history
+buttons. Rejected: the joystick already has a natural press affordance
+and a natural directional affordance, and reusing it kept the panel
+small enough to leave the transcript readable on a phone.
+
+## 2026-05-11 — Raw view negotiates its own PTY geometry
+
+Earlier rule: "The host's SIGWINCH is the only thing that resizes the
+PTY." Still true *by default*, but the mobile client may now request a
+phone-friendly geometry while it's in raw view, since alt-screen TUIs
+(vim, fzf, Claude/Codex) are unreadable at 200-column host geometry on
+a phone.
+
+Two new control messages:
+
+- `{"type":"override-geometry","cols":N,"rows":M}` — the client asks
+  the server to resize the PTY to a geometry it computed from its
+  viewport.
+- `{"type":"release-geometry"}` — the client gives the override back;
+  the server restores the host's geometry.
+
+The server applies the override only while a client is actively holding
+it; switching back to block view, disconnecting, or reconnecting
+releases it. The host's SIGWINCH is still authoritative whenever no
+override is active.
+
+**Why:** Raw view is the escape hatch for full-screen TUIs, and those
+TUIs only render correctly if the PTY itself is the size of the phone's
+visible area. The host accepts a temporary squeeze for the duration of
+that mode, in exchange for the phone being usable for `vim`, `fzf`,
+`htop`, Claude Code, etc.
+
+**Alternatives considered:** Render the host-sized PTY into an
+xterm.js viewport that horizontally scrolls. Rejected: TUIs use
+absolute cursor positioning, so scrolling the viewport doesn't help —
+the user still can't see where the cursor is.
+
+## 2026-05-11 — `BAF_DEV` reverse-proxies the UI to Vite for HMR
+
+The frontend is embedded into the Go binary via `go:embed`, so a plain
+refresh of a running `baf` does not pick up UI edits — every change
+requires a full rebuild. That's right for distribution but punishing for
+UI iteration.
+
+New: if `BAF_DEV` is set to a URL (e.g. `http://localhost:5173`), the
+server's static handler is replaced by an `httputil.ReverseProxy` to
+that target. `make dev` boots Vite first, waits for it to answer, then
+runs `baf` with `BAF_DEV` pointing at it. The phone connects to baf as
+usual (HTTPS, token, cookie); the UI is served from Vite and hot-reloads
+on edit.
+
+**Why this shape, not others:**
+
+- *Why proxy instead of serving Vite directly to the phone?* The Web
+  Speech API requires HTTPS. Vite's dev server is plain HTTP. Putting
+  Go's HTTPS listener in front keeps voice working in dev.
+- *Why not Vite's own HTTPS mode?* That would mean two self-signed
+  certs the phone has to trust, and the cookie auth flow would have to
+  be reimplemented in front of Vite. Proxying is a single chokepoint.
+- *Why `httputil.ReverseProxy` and not a hand-rolled handler?* Modern
+  Go's reverse proxy transparently handles WebSocket upgrades, which
+  is what makes Vite HMR work end-to-end through our HTTPS listener
+  without any extra plumbing. `/api/ws` is mounted before the static
+  handler so the PTY WS is unaffected.
+
+**Caveats accepted:**
+
+- A `baf` restart rotates the session cookie, so the phone has to
+  re-scan the QR after each Go restart. UI-only edits don't require a
+  restart and so don't trigger this.
+- The dev proxy honors the same auth as the embedded path — there is
+  no "skip auth in dev" footgun.
+
+## 2026-05-11 — Frontend rebuilt on React (composable layout + handlers)
+
+Replaced the imperative `main.ts` boot with a React component tree.
+Same DOM IDs, same CSS, same wire protocol, same Go backend.
+
+- Pure session reducer (`session.ts`) owns composer draft, history,
+  recording indicator, view mode, user preference. Side-effectful
+  actions (commit → send PTY bytes + persist history) are bound in the
+  `useSession()` hook.
+- Pure blocks reducer (`blocks.ts`) owns the transcript: block list,
+  pending command, prompt/output state. A separate side-effect
+  controller (`makeBlockController`) maps PTY parser events into
+  reducer actions and owns the per-block AnsiRenderer instance.
+- ANSI rewritten as a pure stream → `Line[]` of `{id, segments}`
+  records (`ansi.ts`). `<Block/>` renders segments as styled spans.
+  No DOM mutation outside React's reconciliation.
+- xterm.js wrapped in `<RawTerminal/>` with the geometry-override
+  lifecycle (request on raw-mode entry / status open / viewport
+  reshape; release on exit) managed by `useEffect`.
+- Joystick gesture state machine in `useJoystick`; hooked to session
+  actions (tap → commit, drag → arrows/history, hold → voice).
+- Voice events flow through `useVoice` into the same session actions.
+
+**Why:** It became hard to reason about what owned which DOM mutation
+when adding behavior. The block-rendering hot path was already 300
+lines of imperative DOM building (`AnsiRenderer`) — moving that to
+declarative spans and putting view/composer state behind a reducer
+turns "where do I add this handler/layout?" into "which component or
+hook owns this concern?"
+
+**What stays byte-for-byte:** wire protocol, OSC 133 parser
+(`parser.ts`), `voice.ts`, `keys.ts`, `haptics.ts`, the Go server,
+all CSS (all IDs preserved so styles needed no edits).
+
+**Cost:** +45KB gz for React. Acceptable next to xterm.js's ~200KB
+already in the bundle.
+
+**Alternatives considered:** Preact (smaller, drop-in JSX) and Solid
+(signals fit our reducer shape). Both viable; React picked because it
+hits zero adoption friction for contributors and the bundle delta is
+small relative to what we're already shipping.
+
 ## 2026-05-10 — Stack summary
 
 - **Backend:** Go, `creack/pty`, `coder/websocket`, `mdp/qrterminal/v3`, stdlib `crypto/tls` for cert generation.
-- **Frontend:** TypeScript + Vite + xterm.js, no UI framework. Hidden input overlay for mobile keyboard. Web Speech API for voice with a developer-vocabulary remapping layer (e.g., "control C" → `\x03`).
+- **Frontend:** TypeScript + Vite + React 18 + xterm.js. Reducer-managed session and block state; per-block ANSI-segment renderer emits styled spans. Hidden input overlay for mobile keyboard. Web Speech API for voice with a developer-vocabulary remapping layer (e.g., "control C" → `\x03`).
 - **Wire protocol:** WebSocket. Binary frames = raw PTY bytes both directions. Text frames = JSON control (`resize`, `ping`).
 - **Auth:** One-time token in URL (printed + QR-encoded by `baf`). Token validates once on first hit, server issues a session cookie, WS upgrade is cookie-gated.
 - **Scrollback on connect:** ~256KB ring buffer of recent PTY output, replayed to new clients before live stream begins. xterm.js owns scrollback from there.

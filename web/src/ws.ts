@@ -16,17 +16,18 @@ type OutboundControl =
 export type InboundControl =
   | { type: "geometry"; cols: number; rows: number };
 
+export type Status = "connecting" | "open" | "closed" | "error";
+
 export interface Transport {
   send(bytes: Uint8Array): void;
   control(msg: OutboundControl): void;
-  onOutput(cb: (chunk: Uint8Array) => void): void;
-  onControl(cb: (msg: InboundControl) => void): void;
-  onStatus(cb: (s: Status) => void): void;
+  onOutput(cb: (chunk: Uint8Array) => void): () => void;
+  onControl(cb: (msg: InboundControl) => void): () => void;
+  onStatus(cb: (s: Status) => void): () => void;
+  status(): Status;
   disconnect(): void;
   reconnect(): void;
 }
-
-export type Status = "connecting" | "open" | "closed" | "error";
 
 export function connect(): Transport {
   // Same-origin WS. The session cookie set during /?t=token exchange
@@ -35,48 +36,45 @@ export function connect(): Transport {
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
 
   let ws: WebSocket | null = null;
-  let outputCb: ((c: Uint8Array) => void) | null = null;
-  let controlCb: ((m: InboundControl) => void) | null = null;
-  let statusCb: ((s: Status) => void) | null = null;
-  const outbox: (Uint8Array | string)[] = [];
+  let currentStatus: Status = "connecting";
+  const outputSubs = new Set<(c: Uint8Array) => void>();
+  const controlSubs = new Set<(m: InboundControl) => void>();
+  const statusSubs = new Set<(s: Status) => void>();
+
+  const setStatus = (s: Status) => {
+    currentStatus = s;
+    for (const cb of statusSubs) cb(s);
+  };
 
   const open = () => {
-    statusCb?.("connecting");
+    setStatus("connecting");
     try {
       ws = new WebSocket(url.toString());
     } catch {
-      statusCb?.("error");
+      setStatus("error");
       return;
     }
     ws.binaryType = "arraybuffer";
 
-    ws.onopen = () => {
-      statusCb?.("open");
-      while (outbox.length) {
-        const m = outbox.shift()!;
-        if (typeof m === "string") ws!.send(m);
-        else ws!.send(m);
-      }
-    };
+    ws.onopen = () => setStatus("open");
     ws.onmessage = (ev) => {
       if (typeof ev.data === "string") {
         try {
           const msg = JSON.parse(ev.data) as InboundControl;
-          controlCb?.(msg);
+          for (const cb of controlSubs) cb(msg);
         } catch {
           // ignore malformed control frames
         }
         return;
       }
-      outputCb?.(new Uint8Array(ev.data as ArrayBuffer));
+      const bytes = new Uint8Array(ev.data as ArrayBuffer);
+      for (const cb of outputSubs) cb(bytes);
     };
     ws.onclose = () => {
       ws = null;
-      statusCb?.("closed");
+      setStatus("closed");
     };
-    ws.onerror = () => {
-      statusCb?.("error");
-    };
+    ws.onerror = () => setStatus("error");
   };
   open();
 
@@ -84,19 +82,19 @@ export function connect(): Transport {
     if (ws && ws.readyState === WebSocket.OPEN) {
       if (typeof m === "string") ws.send(m);
       else ws.send(m);
-    } else {
-      // Drop while disconnected — the user has explicitly chosen to be
-      // offline, replaying staged keystrokes after reconnect would be
-      // surprising. Resize/control on reconnect is sent fresh.
     }
+    // Dropped while disconnected — the user has explicitly chosen to be
+    // offline. Replaying staged keystrokes after reconnect would be
+    // surprising.
   };
 
   return {
     send: (bytes) => sendRaw(bytes),
     control: (msg) => sendRaw(JSON.stringify(msg)),
-    onOutput: (cb) => (outputCb = cb),
-    onControl: (cb) => (controlCb = cb),
-    onStatus: (cb) => (statusCb = cb),
+    onOutput: (cb) => { outputSubs.add(cb); return () => outputSubs.delete(cb); },
+    onControl: (cb) => { controlSubs.add(cb); return () => controlSubs.delete(cb); },
+    onStatus: (cb) => { statusSubs.add(cb); return () => statusSubs.delete(cb); },
+    status: () => currentStatus,
     disconnect: () => {
       if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
         ws.close(1000, "user disconnect");
