@@ -11,7 +11,7 @@ import "@xterm/xterm/css/xterm.css";
 const DEFAULT_FONT_SIZE = 14;
 const MIN_FONT_SIZE = 8;
 const MAX_FONT_SIZE = 18;
-const LINE_HEIGHT = 1.15;
+const LINE_HEIGHT = 1.12;
 const CELL_WIDTH_RATIO = 0.6;
 
 export interface Term {
@@ -27,7 +27,6 @@ export function createTerm(): Term {
   const term = new Terminal({
     cursorBlink: false,
     convertEol: false,
-    fontFamily: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
     fontSize: DEFAULT_FONT_SIZE,
     lineHeight: LINE_HEIGHT,
     letterSpacing: 0,
@@ -84,9 +83,16 @@ export function createTerm(): Term {
       const maxByWidth = rect.width / cols / CELL_WIDTH_RATIO;
       const maxByHeight = rect.height / rows / LINE_HEIGHT;
       const target = Math.min(maxByWidth, maxByHeight);
-      const next = Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, Math.floor(target)));
+      const next = Math.max(
+        MIN_FONT_SIZE,
+        Math.min(MAX_FONT_SIZE, Math.floor(target)),
+      );
       if (term.options.fontSize !== next) term.options.fontSize = next;
-      try { term.resize(cols, rows); } catch { /* ignore */ }
+      try {
+        term.resize(cols, rows);
+      } catch {
+        /* ignore */
+      }
     },
     onData: (cb) => term.onData(cb),
     write: (data) => term.write(data as any),

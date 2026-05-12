@@ -192,15 +192,6 @@ body {
 .xterm .xterm-cursor {
   animation: none;
 }
-.terminal.xterm,
-.xterm-screen {
-  height: 100% !important;
-}
-
-.xterm-rows {
-  height: 100% !important;
-  overflow-y: scroll;
-}
 
 /* ----- bottom panel ---------------------------------------------------- */
 

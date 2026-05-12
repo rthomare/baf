@@ -13,13 +13,18 @@ export function ScrollBottomButton() {
   const [atBottom, setAtBottom] = useState(true);
 
   useEffect(() => {
-    const transcript = document.getElementById("transcript") as HTMLElement | null;
-    if (!transcript) return;
+    const xtermViewport = document.getElementsByClassName(
+      "xterm-viewport",
+    )[0] as HTMLElement | null;
+    if (!xtermViewport) return;
     const xt = getXterm();
 
     const compute = () => {
       if (viewMode === "block") {
-        const dist = transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight;
+        const dist =
+          xtermViewport.scrollHeight -
+          xtermViewport.scrollTop -
+          xtermViewport.clientHeight;
         setAtBottom(dist < BLOCK_BOTTOM_SLACK_PX);
       } else {
         const buf = xt.term.buffer?.active;
@@ -28,24 +33,26 @@ export function ScrollBottomButton() {
     };
 
     compute();
-    transcript.addEventListener("scroll", compute, { passive: true });
+    xtermViewport.addEventListener("scroll", compute, { passive: true });
     const xtDispose = xt.term.onScroll(compute);
     const tDispose = getTransport().onOutput(compute);
 
     return () => {
-      transcript.removeEventListener("scroll", compute);
+      xtermViewport.removeEventListener("scroll", compute);
       xtDispose.dispose();
       tDispose();
     };
   }, [viewMode]);
 
   const onClick = () => {
-    if (viewMode === "block") {
-      const transcript = document.getElementById("transcript") as HTMLElement;
-      transcript.scrollTo({ top: transcript.scrollHeight, behavior: "smooth" });
-    } else {
-      getXterm().term.scrollToBottom();
-    }
+    const xtermViewport = document.getElementsByClassName(
+      "xterm-viewport",
+    )[0] as HTMLElement | null;
+    if (!xtermViewport) return;
+    xtermViewport.scrollTo({
+      top: xtermViewport.scrollHeight,
+      behavior: "smooth",
+    });
     setAtBottom(true);
   };
 
