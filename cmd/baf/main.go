@@ -32,7 +32,23 @@ import (
 
 const defaultPort = 8443
 
+// version is stamped at build time via -ldflags "-X main.version=…".
+// The default "dev" applies to local `go build` and `go run`.
+var version = "dev"
+
 func main() {
+	for _, a := range os.Args[1:] {
+		if a == "-v" || a == "--version" || a == "version" {
+			fmt.Println("baf", version)
+			return
+		}
+		if a == "-h" || a == "--help" || a == "help" {
+			fmt.Println("baf — mirror your terminal to your phone over the LAN.")
+			fmt.Println("usage: baf            spawn $SHELL, print a QR, mirror until exit")
+			fmt.Println("       baf --version  print the version")
+			return
+		}
+	}
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "baf:", err)
 		os.Exit(1)

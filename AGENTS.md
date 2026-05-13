@@ -393,6 +393,50 @@ exit codes and durations is gone. Older scrollback beyond xterm's
 internal buffer (`scrollback: 1000`) is no longer browsable from the
 phone — the replayed history bytes are dropped on arrival.
 
+## 2026-05-13 — Distribution via Homebrew tap (GoReleaser-driven)
+
+`brew install rthomare/baf/baf` is the supported install path.
+Mechanics:
+
+- `.goreleaser.yaml` cross-compiles `baf` for darwin/linux × amd64/arm64
+  with `CGO_ENABLED=0`, after a `before:hooks` step that runs
+  `npm ci && npm run build` in `web/` so the embedded UI is present.
+- `.github/workflows/release.yml` runs on `v*` tags, sets up Go + Node,
+  and invokes GoReleaser. The default `GITHUB_TOKEN` publishes the
+  archives + checksums to a release on this repo; a separate
+  `HOMEBREW_TAP_GITHUB_TOKEN` (PAT scoped to `rthomare/homebrew-baf`)
+  pushes the refreshed `Formula/baf.rb` to the tap.
+- `main.version` is stamped via `-ldflags -X main.version={{ .Version }}`
+  and surfaced by `baf --version` (handled before the run loop so it
+  works without an interactive TTY — needed for the brew formula's
+  `test do` block).
+- Local builds via `make go` stamp `git describe` into the same
+  variable so `./baf --version` is meaningful during development.
+
+**Why this shape, not others:**
+
+- *Why a tap and not homebrew-core?* homebrew-core requires the project
+  to clear popularity thresholds and gives up the ability to ship
+  patches on our own cadence. The tap is the standard pattern for a
+  fresh project.
+- *Why prebuilt binaries instead of a `go build` formula?* The build
+  needs Node to produce the embedded `dist/`. A source-build formula
+  would either depend on Node-as-build-dep (slow, network-heavy) or
+  ship the prebuilt `dist/` in the git tag (couples release ergonomics
+  to the source tree). GoReleaser handles the build once per release
+  and brew users just download bytes.
+- *Why GoReleaser?* It cross-compiles, archives, checksums, generates
+  GitHub releases, and pushes the brew formula in one step. The brew
+  formula it emits already includes a `test do` block invoking
+  `bin/baf --version`, which is why that flag exists.
+
+**Caveats accepted:**
+
+- A PAT is needed because `GITHUB_TOKEN` is scoped to the running repo
+  and can't push to `homebrew-baf`. Documented in `RELEASING.md`.
+- Tap users on Linux can install via Homebrew on Linux but the binary
+  has only been smoke-tested on macOS so far.
+
 ## 2026-05-10 — Stack summary
 
 - **Backend:** Go, `creack/pty`, `coder/websocket`, `mdp/qrterminal/v3`, stdlib `crypto/tls` for cert generation.

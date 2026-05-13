@@ -3,27 +3,50 @@
 Mirror the terminal session in front of you onto your phone, over your local
 Wi-Fi. Type on your laptop or your phone; both stay in sync.
 
+![baf demo](docs/demo.gif)
+
+## Install
+
+```sh
+brew install rthomare/baf/baf
 ```
+
+That's it. No Go, no Node, no clone — just a single binary on `PATH`.
+
+> Don't have Homebrew? Grab a binary from the
+> [latest release](https://github.com/rthomare/baf/releases/latest), or
+> build from source — see [Building from source](#building-from-source).
+
+## Get started in 30 seconds
+
+```sh
 $ baf
 ┌─ back and forth ─┐
 │ open on your phone
 │ https://192.168.1.42:8443/?t=…
 │ (single-use link — token consumed on first scan)
+│ quit: baf-quit, exit, or Ctrl-D
 └──────────────────┘
 <QR>
 $ █          ← your shell, business as usual, now mirrored
 ```
 
+1. Run `baf` in any terminal. Your existing shell keeps working — `baf`
+   just wraps a copy of it that the phone can see.
+2. Scan the QR with your phone (same Wi-Fi). The browser will warn once
+   about the self-signed cert; trust it and you're in.
+3. Type from either side. When you're done, type `baf-quit` (or `exit`,
+   or Ctrl-D) in the terminal, or tap **leave** on the phone.
+
 ## What it does
 
 - Spawns your `$SHELL` inside a PTY that `baf` owns, then tees output to
   both your local terminal and a mobile browser on the same LAN.
-- Serves a tiny, terminal-native web UI for the phone: a block transcript
-  with an xterm.js fallback for full-screen TUIs, a composer + joystick
-  input surface, and voice input tuned for shells.
-- Uses HTTPS with a self-signed cert generated on first run. One token-bearing
-  link is printed (and QR-encoded). The token is consumed on first scan and
-  a session cookie takes over from there.
+- Serves a tiny, terminal-native web UI for the phone: xterm.js with a
+  composer + joystick input surface, plus voice input tuned for shells.
+- Uses HTTPS with a self-signed cert generated on first run. One
+  token-bearing link is printed (and QR-encoded). The token is consumed on
+  first scan and a session cookie takes over from there.
 - Refuses a second mobile client while one is connected. The local terminal
   is always the primary writer.
 
@@ -34,18 +57,19 @@ $ █          ← your shell, business as usual, now mirrored
 - Not a fully transparent attach-to-running-shell. The mirrored session
   begins when you run `baf`; everything from that point forward is mirrored.
 
-## Quickstart
+## Building from source
+
+You only need this if you're hacking on `baf` itself, or installing it on
+a machine without Homebrew.
 
 Requirements: Go 1.26+, Node 20+ (only for building the UI), a Mac or Linux.
 
 ```sh
-# clone, then:
+git clone https://github.com/rthomare/baf
+cd baf
 make build       # builds web UI + Go binary (./baf)
 ./baf
 ```
-
-Open the URL on your phone — accept the one-time TLS warning the first time,
-then it's trusted on that device.
 
 ## Development
 
@@ -68,6 +92,20 @@ still connects exactly as in production — it just gets live-reloaded UI.
 Restarting `baf` rotates the session cookie, so you'll need to re-scan the
 QR after each Go restart; pure UI edits hot-reload without restart.
 
+## Cutting a release
+
+Releases are automated. To ship a new version that brew users will pick up:
+
+```sh
+git tag -a v0.1.0 -m "v0.1.0"
+git push origin v0.1.0
+```
+
+The `release` workflow runs GoReleaser, which cross-compiles the binary,
+uploads archives to GitHub Releases, and pushes a refreshed formula to
+[`rthomare/homebrew-baf`](https://github.com/rthomare/homebrew-baf). See
+[`RELEASING.md`](RELEASING.md) for the one-time tap-repo setup.
+
 ## Layout
 
 ```
@@ -84,27 +122,11 @@ AGENTS.md                 brief + decision log (read me first)
 
 ## How the mobile UI works
 
-The phone isn't a terminal emulator; it's a **block transcript** of your
-session. Each command becomes a block with a timestamp, exit code, and
-streamed output. The host's terminal is untouched and feels native.
-
-`baf` quietly injects [OSC 133 shell integration][osc133] when it
-launches your shell. For zsh it sets a temporary `ZDOTDIR`; for bash it
-passes `--rcfile`. The shim sources your real rc, then layers OSC 133
-markers around each prompt so the mobile parser can tell where commands
-start and end. Your home dotfiles are not modified.
-
-When a program takes over the screen (`vim`, `htop`, `less`, `fzf`, …)
-it emits the alternate-screen sequence; the mobile client detects that
-and seamlessly switches to xterm.js for the duration. When the program
-exits, the block transcript comes back. A `raw` / `block` toggle in the
-mode bar also lets you force either view at any time; raw mode asks the
-host PTY to reflow to a phone-friendly geometry, and releases that
-override when you switch back.
-
-Shells other than zsh and bash are launched plainly and the mobile UI
-gracefully degrades to a single rolling block — usable, just without
-block boundaries.
+The phone renders the PTY directly with xterm.js — same byte stream,
+same colors, same cursor positioning as your laptop. The mobile client
+asks the server to reflow the PTY to a phone-friendly geometry while
+it's connected, and releases that override when it disconnects so the
+host goes back to its native size.
 
 ### Input surface
 
@@ -114,17 +136,13 @@ A single bottom panel handles all input:
 - A **joystick** to the right of the composer does three jobs by gesture:
   - **tap** — submits the draft (`text + \r`).
   - **drag** — arrow key in the dominant direction, auto-repeating while
-    held. In block view, ↑/↓ scrub composer history; in raw view all four
-    arrows go to the PTY.
+    held; all four directions go straight to the PTY.
   - **hold** — starts voice recording; release stops. Transcripts append
     to the composer so you can edit before sending.
 - A thin **tray** above the composer carries `ctrl-c`, `esc`, `tab`, and a
   `…` button that opens an overflow with `Ctrl-D`, `Ctrl-L`, `Ctrl-Z`,
   `Ctrl-R`, `Ctrl-U`, `Ctrl-W`, `Home`, `End`, `PgUp`, `PgDn`.
-- The **mode bar** holds the `raw`/`block` toggle and a `leave` button
-  that disconnects this device.
-
-[osc133]: https://gitlab.freedesktop.org/Per_Bothner/specifications/blob/master/proposals/semantic-prompts.md
+- The **mode bar** holds a `leave` button that disconnects this device.
 
 ## Wire protocol
 
@@ -140,9 +158,8 @@ WebSocket at `/api/ws`, gated by the session cookie set during `/?t=<token>`.
     `{"type":"release-geometry"}` to restore the host's geometry. The
     server applies the override only while a client holds it.
 
-All parsing of OSC 133 and alt-screen sequences happens client-side. The
-server is unchanged regardless of which mobile shape (transcript vs.
-xterm) is in use.
+The server streams raw PTY bytes through unchanged; the mobile renderer
+is just an xterm.js viewport over the same wire format the host sees.
 
 ## Voice input
 
@@ -187,4 +204,4 @@ If something hangs, `BAF_PID` is exported into the spawned shell, so
 1. `AGENTS.md` — what we're building and the decision log behind it.
 2. `internal/pty/session.go` — the PTY model and fan-out.
 3. `internal/server/server.go` — auth, WS, control protocol.
-4. `web/src/main.ts` — the wiring on the mobile side.
+4. `web/src/main.tsx` and `web/src/App.tsx` — the wiring on the mobile side.

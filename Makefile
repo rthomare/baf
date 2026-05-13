@@ -5,8 +5,10 @@ all: build
 web:
 	cd web && npm install && npm run build
 
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+
 go:
-	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o baf ./cmd/baf
+	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=$(VERSION)" -o baf ./cmd/baf
 
 build: web go
 

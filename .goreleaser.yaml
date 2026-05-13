@@ -1,0 +1,86 @@
+version: 2
+
+project_name: baf
+
+before:
+  hooks:
+    # The web UI is embedded into the Go binary via go:embed, so it has
+    # to be built before the cross-compile step runs.
+    - sh -c "cd web && npm ci && npm run build"
+    - go mod tidy
+
+builds:
+  - id: baf
+    main: ./cmd/baf
+    binary: baf
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.version={{ .Version }}
+
+archives:
+  - id: baf
+    formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_
+      {{- if eq .Os "darwin" }}macOS{{- else }}{{ .Os }}{{ end }}_
+      {{- if eq .Arch "amd64" }}x86_64{{- else }}{{ .Arch }}{{ end }}
+    files:
+      - README.md
+      - AGENTS.md
+      - LICENSE*
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "Merge pull request"
+      - "Merge branch"
+
+release:
+  github:
+    owner: rthomare
+    name: baf
+  draft: false
+  prerelease: auto
+  name_template: "baf {{ .Version }}"
+
+brews:
+  - name: baf
+    description: Mirror your terminal session onto your phone over the local Wi-Fi.
+    homepage: https://github.com/rthomare/baf
+    license: MIT
+    repository:
+      owner: rthomare
+      name: homebrew-baf
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    commit_msg_template: "baf: brew formula update for {{ .ProjectName }} {{ .Tag }}"
+    install: |
+      bin.install "baf"
+    test: |
+      assert_match "baf", shell_output("#{bin}/baf --version")
