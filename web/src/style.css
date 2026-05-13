@@ -353,9 +353,9 @@ body {
   display: flex;
   flex-direction: row;
   align-items: stretch;
-  gap: 10px;
-  padding: 10px max(env(safe-area-inset-right), 10px)
-    max(env(safe-area-inset-bottom), 10px) max(env(safe-area-inset-left), 10px);
+  gap: 5px;
+  padding: 5px max(env(safe-area-inset-right), 5px)
+    max(env(safe-area-inset-bottom), 0px) max(env(safe-area-inset-left), 5px);
   background: #0c0c0c;
   border-radius: 18px 18px 0 0;
   position: relative;
@@ -366,8 +366,6 @@ body {
   flex: 1 1 0;
   min-width: 0;
   border-radius: 12px;
-  padding: 14px 16px;
-  min-height: 96px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -379,14 +377,15 @@ body {
   background-size: 10px 10px;
   background-position: 6px 6px;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
-  overflow: hidden;
+  height: 100px;
+  overflow-y: scroll;
+  overflow-x: hidden;
 }
 
-.action-textarea {
+.action-textarea,
+.action-interim {
   width: 100%;
   flex: 1 1 auto;
-  min-height: 68px;
-  max-height: 30vh;
   background: transparent;
   border: 0;
   outline: none;
@@ -398,7 +397,7 @@ body {
   font-size: 15px;
   line-height: 1.45;
   letter-spacing: 0.01em;
-  padding: 0;
+  padding: 0px 8px;
   margin: 0;
 }
 .action-textarea::placeholder {
@@ -412,37 +411,26 @@ body {
   height: 100%;
   z-index: 1;
   pointer-events: none;
+  opacity: 0.33;
 }
 
 .action-interim {
-  position: absolute;
-  left: 16px;
-  right: 16px;
-  bottom: 10px;
-  font-size: 12px;
   color: var(--interim);
-  font-style: italic;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  pointer-events: none;
-  z-index: 2;
 }
 /* While recording: textarea steps out of the way entirely so the
    waveform isn't fighting native form controls (iOS in particular
    renders textareas above absolutely-positioned siblings). The pane
    itself grows so the wave has room to breathe; the interim
    transcript steps forward in white. */
-.action-tray[data-recording="true"] .action-pane {
-  min-height: 132px;
-}
 .action-tray[data-recording="true"] .action-textarea {
   display: none;
 }
+#composer,
 .action-tray[data-recording="true"] .action-interim {
-  color: rgba(255, 255, 255, 0.9);
-  font-style: normal;
-  font-size: 14px;
+  position: absolute;
+  height: 100%;
+  overflow-y: scroll;
+  padding-top: 8px;
 }
 
 /* Right: joystick.

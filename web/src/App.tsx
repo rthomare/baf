@@ -51,7 +51,14 @@ function Shell() {
     >
       <div id="view" style={{ flex: 1, position: "relative" }}>
         <span
-          style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            padding: "0px 5px",
+          }}
         >
           <RawTerminal />
         </span>
@@ -61,6 +68,7 @@ function Shell() {
       <span
         style={{
           flex: 0,
+          padding: "5px 5px",
         }}
       >
         <BottomPanel />

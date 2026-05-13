@@ -18,13 +18,19 @@ export function ActionTray() {
   const taRef = useRef<HTMLTextAreaElement>(null);
   const hasText = draft.trim().length > 0;
 
-  // Auto-grow the textarea up to a cap.
   useEffect(() => {
-    const el = taRef.current;
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = Math.min(el.scrollHeight, 200) + "px";
-  }, [draft]);
+    document
+      .getElementsByClassName("action-interim")[0]
+      ?.scrollIntoView({ behavior: "smooth" });
+  }, [interim]);
+
+  // Scroll the interim text to the bottom when it changes.
+  useEffect(() => {
+    const el = document.getElementsByClassName("action-interim")[0];
+    if (el) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [interim]);
 
   // After history scrub, push the caret to end.
   useEffect(() => {
@@ -79,9 +85,7 @@ export function ActionTray() {
           autoCorrect="off"
           autoCapitalize="off"
           spellCheck={false}
-          placeholder={
-            recording ? "" : "Type, or hold the joystick to record."
-          }
+          placeholder={recording ? "" : "Type, or hold the joystick to record."}
           aria-label="command draft"
           value={draft}
           onChange={(e) => actions.setDraft(e.target.value)}
@@ -113,7 +117,9 @@ export function ActionTray() {
 
         <Waveform active={recording} useMic={recording} />
 
-        <div className="action-interim" aria-live="polite">{interim}</div>
+        <div className="action-interim" aria-live="polite">
+          {interim}
+        </div>
       </div>
 
       <div className="joystick-rail">
