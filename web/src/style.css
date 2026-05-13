@@ -22,7 +22,6 @@
   --interim: #6a6a6a;
   --ok: #8ec07c;
   --err: #e06c75;
-  --block-rule: #161616;
 }
 
 * {
@@ -30,34 +29,25 @@
 }
 html,
 body {
-  height: 100%;
-  margin: 0;
-  padding: 0;
   background: var(--bg);
   color: var(--fg);
+  margin: 0px;
+  padding: 0px;
   overscroll-behavior: none;
-}
-body {
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  overscroll-behavior: none;
-  -webkit-touch-callout: none;
-  font-size: 14px;
+  touch-action: none;
 }
 
-#app {
-  height: var(--vv-h, 100dvh);
-  display: flex;
-  flex-direction: column;
-  transition: height 60ms ease-out;
+body {
+  box-sizing: border-box;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  -webkit-touch-callout: none;
+  font-size: 14px;
 }
 
 /* ----- view: transcript or xterm ---------------------------------------- */
 
 #view {
   background: var(--bg);
-  flex: 1;
-  min-height: 0;
-  position: relative;
 }
 
 /* Floating "scroll to latest" affordance. Lives inside #view so it
@@ -99,85 +89,6 @@ body {
 }
 #scroll-bottom:active {
   background: var(--key-press);
-}
-
-#transcript {
-  height: 100%;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: max(env(safe-area-inset-top), 2px)
-    max(env(safe-area-inset-right), 2px) 2px max(env(safe-area-inset-left), 2px);
-  scroll-behavior: smooth;
-}
-
-#xterm-host {
-  position: absolute;
-  inset: 0;
-  padding: max(env(safe-area-inset-top), 2px)
-    max(env(safe-area-inset-right), 2px) 0 max(env(safe-area-inset-left), 2px);
-  overflow-x: auto;
-  overflow-y: hidden;
-  height: 100%;
-}
-#xterm-host[hidden] {
-  display: none;
-}
-
-.block {
-  padding: 6px 0 14px 0;
-  /* Off-screen blocks skip layout/paint until they near the viewport.
-     `contain-intrinsic-size: auto 200px` reserves a 200px placeholder
-     on first encounter; once the block is rendered the browser caches
-     its real height. `contain: content` keeps appends inside a running
-     block from re-flowing blocks above it. */
-  content-visibility: auto;
-  contain-intrinsic-size: auto 200px;
-  contain: content;
-}
-.block + .block {
-  border-top: 1px solid var(--block-rule);
-}
-.block-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 11px;
-  color: var(--muted);
-  letter-spacing: 0.04em;
-  padding: 4px 2px;
-}
-.block-status.status-ok {
-  color: var(--ok);
-}
-.block-status.status-err {
-  color: var(--err);
-}
-.block[data-state="running"] .block-status::before {
-  content: "▶ ";
-  color: var(--accent);
-}
-.block-command {
-  font-size: 14px;
-  padding: 2px 2px 6px 2px;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-.block-command::before {
-  content: "› ";
-  color: var(--accent);
-}
-.block-output {
-  margin: 0;
-  padding: 0 2px;
-  font-family: inherit;
-  font-size: 13px;
-  line-height: 1.45;
-  white-space: pre-wrap;
-  word-break: break-word;
-  color: var(--fg);
-}
-.block-output .line {
-  min-height: 1em;
 }
 
 #xterm-host .xterm-helper-textarea {
@@ -223,7 +134,7 @@ body {
 .overflow-actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 6px;
   padding-bottom: 8px;
   border-bottom: 1px solid var(--tray-border);
@@ -249,7 +160,6 @@ body {
   background: var(--key-press);
 }
 
-#view-toggle,
 #leave {
   height: 30px;
   padding: 0 12px;
@@ -262,18 +172,6 @@ body {
   letter-spacing: 0.04em;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
-}
-#view-toggle {
-  color: var(--fg);
-  border-color: var(--tray-border);
-  background: var(--key-bg);
-}
-#view-toggle[data-active="raw"] {
-  color: var(--accent);
-  border-color: var(--accent);
-}
-#view-toggle:active {
-  background: var(--key-press);
 }
 #leave:active {
   background: var(--key-press);
@@ -567,61 +465,46 @@ body {
 
 .joystick-rail {
   position: relative;
-  flex: 0 0 78px;
-  width: 78px;
+  flex: 0 0 64px;
+  width: 64px;
   height: 92px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-/* Native SVG aspect is 26:13. Shrunk to 20×9 and pulled tighter against
-   the knob so the rail can be narrower — the composer to the left
-   gets the reclaimed width. */
-.joystick-arrow {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 20px;
-  height: 9px;
-  fill: none;
-  stroke: rgba(255, 255, 255, 0.1);
-  stroke-width: 1;
-  pointer-events: none;
-  transition: stroke 90ms ease;
-}
-.joystick-arrow.up {
-  transform: translate(-50%, -50%) translateY(-28px);
-}
-.joystick-arrow.down {
-  transform: translate(-50%, -50%) translateY(28px) rotate(180deg);
-}
-.joystick-arrow.left {
-  transform: translate(-50%, -50%) translateX(-29px) rotate(-90deg);
-}
-.joystick-arrow.right {
-  transform: translate(-50%, -50%) translateX(29px) rotate(90deg);
-}
-.joystick-arrow[data-active="true"] {
-  stroke: rgba(255, 255, 255, 0.9);
-}
-
-/* The ring is a transparent 50×50 gesture target. The visible puck is
-   the .joystick-knob, which carries the gradient border + black core
-   and *moves as a unit* during drag (the hook translates the knob).
-   Earlier, only the inner button moved while the gradient stayed put,
-   and the button had no base translate(-50%,-50%), so it jumped to
-   the corner the moment a drag began. */
+/* The ring is the gesture target. Inside it sit two stacked visuals:
+   .joystick-base is the static "housing" collar — a sunken socket —
+   and .joystick-knob is the moveable cap that tips toward the drag
+   direction. The knob's translation is the only directional indicator
+   now that the arrows are gone. */
 .joystick-ring {
   position: relative;
-  width: 50px;
-  height: 50px;
+  width: 62px;
+  height: 62px;
   border-radius: 50%;
   touch-action: none;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
   -webkit-user-select: none;
   cursor: pointer;
+}
+
+.joystick-base {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgba(0, 0, 0, 0.55) 0%,
+    rgba(0, 0, 0, 0.35) 60%,
+    rgba(255, 255, 255, 0.03) 100%
+  );
+  box-shadow:
+    inset 0 1px 1px rgba(0, 0, 0, 0.55),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.04),
+    0 0 0 1px rgba(255, 255, 255, 0.06);
+  pointer-events: none;
 }
 
 .joystick-knob {
@@ -634,6 +517,9 @@ body {
   border-radius: 50%;
   box-sizing: border-box;
   background: linear-gradient(135deg, #2600ff 0%, #7000ff 50%, #2600ff 100%);
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.55),
+    0 1px 0 rgba(255, 255, 255, 0.08) inset;
   transform: translate(-50%, -50%);
   pointer-events: none;
   transition:

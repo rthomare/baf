@@ -357,10 +357,46 @@ already in the bundle.
 hits zero adoption friction for contributors and the bundle delta is
 small relative to what we're already shipping.
 
+## 2026-05-11 — Block transcript removed; raw is the only view
+
+Earlier we kept two renderers side-by-side: a Warp-style block
+transcript driven by OSC 133 markers, and xterm.js for alt-screen
+TUIs, with auto-flip between them. Block mode is now removed —
+xterm.js is the only renderer.
+
+What goes away with it: `<BlockTranscript>`, the `BlocksState`
+reducer + `BlockController` side-effect controller, the per-block
+`AnsiRenderer`, the `history-blocks` builder, `viewMode` /
+`userPreference` in session state, the alt-screen / cursor-visibility
+mode flips, the view toggle in the overflow menu, and the block-mode
+branch of the joystick directionals (↑/↓ as composer history scrub) —
+the joystick always drives the PTY now.
+
+What stays: the OSC 133 shell-integration injection on the server
+(harmless; consumed silently by xterm) and the `history-start` /
+`history-end` control frames on the wire — the client now drops the
+history bytes since xterm's scrollback appends and the server sends
+the tail first, which would put older content beneath newer content
+if both were written.
+
+**Why:** Two renderers in parallel was paying for itself only when a
+shell-integrated command finished cleanly inside a non-alt-screen
+session, and most of the time the user was either looking at xterm
+already (Claude/Codex/vim/fzf) or wanted a single source of truth
+for what their terminal looks like. Carrying the block path forward
+also meant every wire-format or input refactor had to be tested
+against both views. Removing it is ~600 lines lighter and collapses
+the state machine.
+
+**Cost accepted:** the visual command-by-command transcript with
+exit codes and durations is gone. Older scrollback beyond xterm's
+internal buffer (`scrollback: 1000`) is no longer browsable from the
+phone — the replayed history bytes are dropped on arrival.
+
 ## 2026-05-10 — Stack summary
 
 - **Backend:** Go, `creack/pty`, `coder/websocket`, `mdp/qrterminal/v3`, stdlib `crypto/tls` for cert generation.
-- **Frontend:** TypeScript + Vite + React 18 + xterm.js. Reducer-managed session and block state; per-block ANSI-segment renderer emits styled spans. Hidden input overlay for mobile keyboard. Web Speech API for voice with a developer-vocabulary remapping layer (e.g., "control C" → `\x03`).
+- **Frontend:** TypeScript + Vite + React 18 + xterm.js. Reducer-managed session state; xterm.js is the sole renderer. Hidden input overlay for mobile keyboard. Web Speech API for voice with a developer-vocabulary remapping layer (e.g., "control C" → `\x03`).
 - **Wire protocol:** WebSocket. Binary frames = raw PTY bytes both directions. Text frames = JSON control (`resize`, `ping`).
 - **Auth:** One-time token in URL (printed + QR-encoded by `baf`). Token validates once on first hit, server issues a session cookie, WS upgrade is cookie-gated.
 - **Scrollback on connect:** ~256KB ring buffer of recent PTY output, replayed to new clients before live stream begins. xterm.js owns scrollback from there.

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { SessionProvider } from "./SessionContext";
 import { useTransport } from "./useTransport";
 import { useStreamRouter } from "./useStreamRouter";
@@ -8,7 +8,6 @@ import { BottomPanel } from "./components/BottomPanel";
 import { StatusOverlay } from "./components/StatusOverlay";
 import { RawTerminal } from "./components/RawTerminal";
 import { ScrollBottomButton } from "./components/ScrollBottomButton";
-import { BlockTranscript } from "./components/BlockTranscript";
 
 function Shell() {
   const { status } = useTransport();
@@ -17,20 +16,55 @@ function Shell() {
   useStreamRouter();
   useVoice();
 
+  const updateHeightCallback = useCallback(() => {
+    const vv = window.visualViewport;
+    // Subtract safe area if needed, though visualViewport usually accounts for the keyboard
+    const viewHeight = vv ? vv.height : window.innerHeight;
+    document.documentElement.style.setProperty(
+      "--visible-height",
+      `${viewHeight}px`,
+    );
+  }, []);
+
+  const stopScrolling = useCallback(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
+  useEffect(() => {
+    window.visualViewport?.addEventListener("resize", updateHeightCallback);
+    window.visualViewport?.addEventListener("scroll", updateHeightCallback);
+    window.onscroll = stopScrolling;
+  }, [updateHeightCallback]);
+
   useEffect(() => {
     document.title = status === "open" ? "baf" : `baf (${status})`;
   }, [status]);
 
   return (
-    <main id="app">
-      <div id="view">
-        <BlockTranscript />
-        <RawTerminal />
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "var(--visible-height, 100dvh)",
+      }}
+    >
+      <div id="view" style={{ flex: 1, position: "relative" }}>
+        <span
+          style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+        >
+          <RawTerminal />
+        </span>
         <ScrollBottomButton />
       </div>
-      <BottomPanel />
+      <span
+        style={{
+          flex: 0,
+        }}
+      >
+        <BottomPanel />
+      </span>
       <StatusOverlay />
-    </main>
+    </div>
   );
 }
 

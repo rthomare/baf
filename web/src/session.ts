@@ -1,12 +1,9 @@
-// Session state: composer draft, history, voice indicator, current view
-// mode. The reducer is pure; side-effectful actions (commit → send to
-// PTY + persist history) are bound in useSession().
+// Session state: composer draft, history, voice indicator. The reducer
+// is pure; side-effectful actions (commit → send to PTY + persist
+// history) are bound in useSession().
 
 import { useReducer, useEffect, useMemo, useRef } from "react";
 import { getTransport } from "./transport";
-import { getBlockController } from "./block-controller-ref";
-
-export type ViewMode = "block" | "raw";
 
 export interface SessionState {
   draft: string;
@@ -14,12 +11,6 @@ export interface SessionState {
   historyCursor: number;
   recording: boolean;
   interim: string;
-  // viewMode is what's *currently* on screen. userPreference is what the
-  // user last chose via the toggle — TUI auto-flips force raw regardless,
-  // but on the way out we restore the preference rather than always
-  // landing back in block.
-  viewMode: ViewMode;
-  userPreference: ViewMode;
 }
 
 export type Action =
@@ -29,9 +20,7 @@ export type Action =
   | { type: "commit-accepted"; text: string }
   | { type: "history-step"; dir: -1 | 1 }
   | { type: "set-recording"; on: boolean }
-  | { type: "set-interim"; text: string }
-  | { type: "set-view-mode"; mode: ViewMode }
-  | { type: "set-user-preference"; mode: ViewMode };
+  | { type: "set-interim"; text: string };
 
 const HISTORY_KEY = "baf.history";
 
@@ -59,10 +48,6 @@ export function initialState(): SessionState {
     historyCursor: history.length,
     recording: false,
     interim: "",
-    // Default to raw: it covers Claude/Codex out of the box; block
-    // transcript is opt-in.
-    viewMode: "raw",
-    userPreference: "raw",
   };
 }
 
@@ -104,11 +89,6 @@ export function reduce(state: SessionState, action: Action): SessionState {
       return { ...state, recording: action.on };
     case "set-interim":
       return { ...state, interim: action.text };
-    case "set-view-mode":
-      if (action.mode === state.viewMode) return state;
-      return { ...state, viewMode: action.mode };
-    case "set-user-preference":
-      return { ...state, userPreference: action.mode, viewMode: action.mode };
   }
 }
 
@@ -120,8 +100,6 @@ export interface SessionActions {
   historyStep(dir: -1 | 1): void;
   setRecording(on: boolean): void;
   setInterim(text: string): void;
-  setViewMode(mode: ViewMode): void;
-  setUserPreference(mode: ViewMode): void;
 }
 
 const enc = new TextEncoder();
@@ -150,18 +128,13 @@ export function useSession() {
     commitDraft() {
       const text = draftRef.current;
       const transport = getTransport();
-      if (text) {
-        getBlockController()?.noteSentCommand(text);
-        transport.send(enc.encode(text));
-      }
+      if (text) transport.send(enc.encode(text));
       transport.send(enc.encode("\r"));
       dispatch({ type: "commit-accepted", text });
     },
     historyStep(dir) { dispatch({ type: "history-step", dir }); },
     setRecording(on) { dispatch({ type: "set-recording", on }); },
     setInterim(text) { dispatch({ type: "set-interim", text }); },
-    setViewMode(mode) { dispatch({ type: "set-view-mode", mode }); },
-    setUserPreference(mode) { dispatch({ type: "set-user-preference", mode }); },
   }), []);
 
   return { state, actions };

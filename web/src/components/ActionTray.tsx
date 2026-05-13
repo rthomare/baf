@@ -18,7 +18,7 @@ interface Props {
 }
 
 export function ActionTray({ onToggleOverflow, overflowOpen }: Props) {
-  const { draft, interim, recording, historyCursor, history, viewMode } = useSessionState();
+  const { draft, interim, recording, historyCursor, history } = useSessionState();
   const actions = useSessionActions();
   const taRef = useRef<HTMLTextAreaElement>(null);
   const [keysExpanded, setKeysExpanded] = useState(false);
@@ -53,18 +53,12 @@ export function ActionTray({ onToggleOverflow, overflowOpen }: Props) {
     if (!hasText) setKeysExpanded(false);
   }, [hasText]);
 
-  // Joystick: in raw view all 4 arrows go to the PTY; in block view
-  // ↑/↓ scrub composer history and ←/→ are no-ops.
+  // Joystick: all 4 arrows go to the PTY.
   const fireDir = (dir: Dir) => {
-    if (viewMode === "raw") {
-      pressKey(dir);
-      return;
-    }
-    if (dir === "up") actions.historyStep(-1);
-    else if (dir === "down") actions.historyStep(1);
+    pressKey(dir);
   };
 
-  const { state, activeDir, knobRef, rootProps } = useJoystick({
+  const { state, knobRef, rootProps } = useJoystick({
     onTap: () => actions.commitDraft(),
     onDragFire: fireDir,
     onHoldStart: () => {
@@ -209,11 +203,6 @@ export function ActionTray({ onToggleOverflow, overflowOpen }: Props) {
       </div>
 
       <div className="joystick-rail">
-        <Arrow dir="up"    active={activeDir === "up"} />
-        <Arrow dir="down"  active={activeDir === "down"} />
-        <Arrow dir="left"  active={activeDir === "left"} />
-        <Arrow dir="right" active={activeDir === "right"} />
-
         <div
           className="joystick-ring"
           data-recording={recording}
@@ -228,6 +217,7 @@ export function ActionTray({ onToggleOverflow, overflowOpen }: Props) {
           {...rootProps}
           onPointerDown={onJoystickPointerDown}
         >
+          <div className="joystick-base" aria-hidden="true" />
           <div className="joystick-knob" ref={knobRef} data-recording={recording}>
             <div className="joystick-button">
               {hasText ? <SendGlyph /> : <MicGlyph />}
@@ -236,19 +226,6 @@ export function ActionTray({ onToggleOverflow, overflowOpen }: Props) {
         </div>
       </div>
     </div>
-  );
-}
-
-function Arrow({ dir, active }: { dir: Dir; active: boolean }) {
-  return (
-    <svg
-      className={`joystick-arrow ${dir}`}
-      data-active={active}
-      viewBox="0 0 26 13"
-      aria-hidden="true"
-    >
-      <path d="M23.9 12.25H1.19L12.56 0.71Z" />
-    </svg>
   );
 }
 

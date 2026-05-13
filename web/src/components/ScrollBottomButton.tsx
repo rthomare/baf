@@ -1,15 +1,10 @@
 import { useEffect, useState } from "react";
-import { useSessionState } from "../SessionContext";
 import { getXterm } from "../xterm-singleton";
 import { getTransport } from "../transport";
 
-const BLOCK_BOTTOM_SLACK_PX = 24;
-
-// The FAB shows whenever the visible area isn't at the bottom in
-// whichever view is active. Recompute on (a) the relevant scroll event,
-// (b) every chunk of PTY output, and (c) view-mode change.
+// The FAB shows whenever xterm's visible viewport isn't at the bottom.
+// Recompute on (a) xterm scroll, (b) every chunk of PTY output.
 export function ScrollBottomButton() {
-  const { viewMode } = useSessionState();
   const [atBottom, setAtBottom] = useState(true);
 
   useEffect(() => {
@@ -20,16 +15,8 @@ export function ScrollBottomButton() {
     const xt = getXterm();
 
     const compute = () => {
-      if (viewMode === "block") {
-        const dist =
-          xtermViewport.scrollHeight -
-          xtermViewport.scrollTop -
-          xtermViewport.clientHeight;
-        setAtBottom(dist < BLOCK_BOTTOM_SLACK_PX);
-      } else {
-        const buf = xt.term.buffer?.active;
-        setAtBottom(!buf || buf.viewportY >= buf.baseY);
-      }
+      const buf = xt.term.buffer?.active;
+      setAtBottom(!buf || buf.viewportY >= buf.baseY);
     };
 
     compute();
@@ -42,7 +29,7 @@ export function ScrollBottomButton() {
       xtDispose.dispose();
       tDispose();
     };
-  }, [viewMode]);
+  }, []);
 
   const onClick = () => {
     const xtermViewport = document.getElementsByClassName(

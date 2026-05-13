@@ -1,12 +1,10 @@
-// xterm.js wrapper. Mounted once and kept in the DOM at all times (just
-// hidden when block view is showing) so its buffer survives view
-// toggles. Owns the geometry override lifecycle: requests a phone-sized
-// PTY when entering raw, releases it on the way out.
+// xterm.js, always mounted. Owns the geometry override lifecycle so
+// the PTY is sized for the phone's viewport while a client is
+// attached; releases the override on disconnect.
 
 import { useEffect, useRef } from "react";
 import { getTransport } from "../transport";
 import { getXterm } from "../xterm-singleton";
-import { useSessionState } from "../SessionContext";
 import { useTransport } from "../useTransport";
 
 const FONT = 14;
@@ -20,8 +18,14 @@ function preferredRawGeometry(): { cols: number; rows: number } {
   const rect = view.getBoundingClientRect();
   const cellW = FONT * CELL_W_RATIO;
   const cellH = FONT * LINE_HEIGHT;
-  const cols = Math.max(40, Math.min(160, Math.floor((rect.width - PADDING) / cellW)));
-  const rows = Math.max(10, Math.min(80, Math.floor((rect.height - PADDING) / cellH)));
+  const cols = Math.max(
+    40,
+    Math.min(160, Math.floor((rect.width - PADDING) / cellW)),
+  );
+  const rows = Math.max(
+    10,
+    Math.min(80, Math.floor((rect.height - PADDING) / cellH)),
+  );
   return { cols, rows };
 }
 
@@ -29,29 +33,18 @@ const enc = new TextEncoder();
 
 export function RawTerminal() {
   const hostRef = useRef<HTMLDivElement>(null);
-  const { viewMode } = useSessionState();
   const { status } = useTransport();
 
-  // Latest viewMode in a ref so the xterm.onData closure (bound once on
-  // mount) can gate keystrokes without being re-bound on every flip.
-  const viewModeRef = useRef(viewMode);
-  viewModeRef.current = viewMode;
-
-  // Mount xterm once and wire keystrokes to the transport.
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
     const xt = getXterm();
     xt.attach(host);
-    xt.onData((d) => {
-      if (viewModeRef.current === "raw") getTransport().send(enc.encode(d));
-    });
+    xt.onData((d) => getTransport().send(enc.encode(d)));
   }, []);
 
-  // Geometry override: hold while raw + connected; release on exit or
-  // disconnect. Each request also pins the latest viewport-derived size.
   useEffect(() => {
-    if (viewMode !== "raw" || status !== "open") return;
+    if (status !== "open") return;
     const t = getTransport();
     const apply = () => {
       const { cols, rows } = preferredRawGeometry();
@@ -67,10 +60,8 @@ export function RawTerminal() {
       window.visualViewport?.removeEventListener("resize", apply);
       t.control({ type: "release-geometry" });
     };
-  }, [viewMode, status]);
+  }, [status]);
 
-  // Apply geometry from the server whenever it arrives, so xterm
-  // matches the PTY size.
   useEffect(() => {
     const t = getTransport();
     return t.onControl((msg) => {
@@ -82,11 +73,6 @@ export function RawTerminal() {
   }, []);
 
   return (
-    <div
-      id="xterm-host"
-      ref={hostRef}
-      hidden={viewMode !== "raw"}
-      aria-label="raw terminal"
-    />
+    <div style={{ height: "100%" }} ref={hostRef} aria-label="raw terminal" />
   );
 }

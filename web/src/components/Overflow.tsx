@@ -1,7 +1,6 @@
 import { useEffect, useRef } from "react";
 import { pressKey } from "../actions";
 import { useTransport } from "../useTransport";
-import { useSessionActions, useSessionState } from "../SessionContext";
 
 interface Props {
   open: boolean;
@@ -24,11 +23,6 @@ const KEYS: Array<{ key: string; label: string }> = [
 export function Overflow({ open, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const { leave } = useTransport();
-  const { viewMode } = useSessionState();
-  const actions = useSessionActions();
-  const isRaw = viewMode === "raw";
-  const viewLabel = isRaw ? "blocks" : "raw";
-  const viewTarget = isRaw ? "block" : "raw";
 
   // Click anywhere outside the panel (and outside the more-toggle that
   // opens it) closes it. The more-toggle's own click is allowed through
@@ -54,18 +48,6 @@ export function Overflow({ open, onClose }: Props) {
   return (
     <div id="overflow" ref={ref} hidden={!open} role="menu">
       <div className="overflow-actions">
-        <button
-          id="view-toggle"
-          type="button"
-          aria-label="toggle terminal view"
-          data-active={isRaw ? "raw" : "block"}
-          onClick={() => {
-            actions.setUserPreference(viewTarget);
-            onClose();
-          }}
-        >
-          {viewLabel}
-        </button>
         <button
           id="leave"
           type="button"
