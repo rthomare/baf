@@ -109,94 +109,255 @@ body {
 #bottom-panel {
   display: flex;
   flex-direction: column;
-  background: var(--tray-bg);
-  border-top: 1px solid var(--tray-border);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
 
-/* ----- overflow keys panel -------------------------------------------- */
+/* ----- floating settings + overflow keys panel ------------------------ */
 
-#overflow {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 8px max(env(safe-area-inset-right), 8px) 0
-    max(env(safe-area-inset-left), 8px);
-  padding: 8px;
-  background: rgba(14, 14, 14, 0.96);
-  border: 1px solid var(--tray-border);
-  border-radius: 8px;
-}
-#overflow[hidden] {
-  display: none;
-}
-.overflow-actions {
+/* Floating sliders button anchored to the top of the terminal area.
+   Fades and slides up while the user is actively scrolling the buffer
+   so it never sits on top of what they're trying to read. PTY-driven
+   autoscroll doesn't fire user input events so it stays put then. */
+.floating-settings {
+  position: fixed;
+  top: max(env(safe-area-inset-top), 10px);
+  right: max(env(safe-area-inset-right), 10px);
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--tray-border);
+  justify-content: center;
+  background: rgba(20, 20, 20, 0.94);
+  color: rgba(255, 255, 255, 0.78);
+  border: 1px solid var(--tray-border);
+  border-radius: 12px;
+  padding: 0;
+  cursor: pointer;
+  z-index: 6;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.5);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease,
+    background-color 120ms ease,
+    color 120ms ease;
 }
+.floating-settings:hover,
+.floating-settings:active,
+.floating-settings[aria-expanded="true"] {
+  background: #1f1f1f;
+  color: #fff;
+}
+.floating-settings[data-hidden="true"] {
+  opacity: 0;
+  transform: translateY(-8px);
+  pointer-events: none;
+}
+
+/* Overflow panel — the look and palette mirror the action tray:
+   a dark dotted pane with rounded corners, dim border, soft drop
+   shadow, and chip-style buttons in DM Mono. Open/close animates
+   with a fade + slide + light scale anchored to the top-right (where
+   the floating settings button sits), and each key chip stages in
+   on a tiny delay so the grid materializes rather than snaps. */
+#overflow {
+  position: fixed;
+  top: calc(max(env(safe-area-inset-top), 10px) + 52px);
+  right: max(env(safe-area-inset-right), 10px);
+  width: min(
+    320px,
+    calc(
+      100vw - max(env(safe-area-inset-left), 10px) -
+        max(env(safe-area-inset-right), 10px)
+    )
+  );
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  background: #0c0c0c;
+  background-image: radial-gradient(
+    rgba(255, 255, 255, 0.045) 1px,
+    transparent 1px
+  );
+  background-size: 10px 10px;
+  background-position: 6px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 14px;
+  box-shadow:
+    0 14px 36px rgba(0, 0, 0, 0.62),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.015);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  z-index: 6;
+  transform-origin: top right;
+  opacity: 0;
+  transform: translateY(-8px) scale(0.97);
+  pointer-events: none;
+  transition:
+    opacity 180ms ease,
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+#overflow[data-open="true"] {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
 .overflow-keys {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 6px;
 }
 .overflow-keys button {
-  height: 38px;
-  padding: 0 8px;
-  background: var(--key-bg);
-  color: var(--key-fg);
-  border: 1px solid var(--tray-border);
-  border-radius: 6px;
-  font-family: inherit;
-  font-size: 13px;
+  height: 36px;
+  padding: 0 10px;
+  background: #161616;
+  color: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+  font-family: "DM Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  font-weight: 400;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  text-align: center;
+  cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
+  transform-origin: top center;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease,
+    transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 200ms ease;
+}
+.overflow-keys button:hover {
+  background: #1f1f1f;
+  color: #fff;
 }
 .overflow-keys button:active {
-  background: var(--key-press);
+  background: #2a2a2a;
+  color: #fff;
+  transform: scale(0.97);
+}
+
+/* Stagger entry: each chip fades up just after the panel arrives.
+   When closed, chips collapse instantly so reopening starts fresh. */
+#overflow:not([data-open="true"]) .overflow-keys button {
+  opacity: 0;
+  transform: translateY(-4px);
+  transition-duration: 0ms;
+}
+#overflow[data-open="true"] .overflow-keys button {
+  opacity: 1;
+  transform: translateY(0);
+}
+#overflow[data-open="true"] .overflow-keys button:nth-child(1) {
+  transition-delay: 60ms;
+}
+#overflow[data-open="true"] .overflow-keys button:nth-child(2) {
+  transition-delay: 75ms;
+}
+#overflow[data-open="true"] .overflow-keys button:nth-child(3) {
+  transition-delay: 90ms;
+}
+#overflow[data-open="true"] .overflow-keys button:nth-child(4) {
+  transition-delay: 105ms;
+}
+#overflow[data-open="true"] .overflow-keys button:nth-child(5) {
+  transition-delay: 120ms;
+}
+#overflow[data-open="true"] .overflow-keys button:nth-child(6) {
+  transition-delay: 135ms;
+}
+#overflow[data-open="true"] .overflow-keys button:nth-child(7) {
+  transition-delay: 150ms;
+}
+#overflow[data-open="true"] .overflow-keys button:nth-child(8) {
+  transition-delay: 165ms;
+}
+#overflow[data-open="true"] .overflow-keys button:nth-child(9) {
+  transition-delay: 180ms;
+}
+#overflow[data-open="true"] .overflow-keys button:nth-child(10) {
+  transition-delay: 195ms;
+}
+#overflow[data-open="true"] .overflow-keys button:nth-child(11) {
+  transition-delay: 210ms;
+}
+#overflow[data-open="true"] .overflow-keys button:nth-child(12) {
+  transition-delay: 225ms;
+}
+#overflow[data-open="true"] .overflow-keys button:nth-child(13) {
+  transition-delay: 240ms;
+}
+
+/* Footer: a low-contrast label on the left and a quiet leave button
+   on the right, separated from the chips by a hairline divider. */
+.overflow-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 8px;
+  margin-top: 2px;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+.overflow-hint {
+  font-family: "DM Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.32);
 }
 
 #leave {
-  height: 30px;
-  padding: 0 12px;
+  height: 28px;
+  padding: 0 14px;
   background: transparent;
-  color: var(--muted);
-  border: 1px solid transparent;
+  color: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 999px;
-  font-family: inherit;
-  font-size: 12px;
-  letter-spacing: 0.04em;
+  font-family: "DM Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: lowercase;
+  cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease,
+    border-color 120ms ease;
+}
+#leave:hover {
+  color: rgba(255, 255, 255, 0.85);
+  border-color: rgba(255, 255, 255, 0.12);
 }
 #leave:active {
-  background: var(--key-press);
+  background: rgba(224, 108, 117, 0.12);
   color: var(--danger);
+  border-color: rgba(224, 108, 117, 0.35);
 }
 
-/* ----- action tray (composer + soft keys + joystick) ------------------ */
-/* Single panel: dark gradient with subtle grid texture, textarea on the
-   left, the 50px gradient-ring joystick button on the right. Soft keys
-   live at the bottom of the textarea and collapse out when the draft
-   has text; an `actions` chip brings them back. The same circular
-   button is mic / send / joystick — drag for arrows, hold for voice,
-   tap for submit.
-
-   IDs (#composer, #more-toggle) match the legacy markup so existing
-   selectors / scripts elsewhere keep resolving. */
+/* ----- action tray ------------------------------------------------------
+   Single horizontal row: dotted content pane on the left, joystick on
+   the right. The pane holds the textarea, with the waveform canvas
+   stacked over it (the canvas takes over the visual when recording —
+   the textarea is hidden so it doesn't fight the canvas for layering). */
 
 .action-tray {
   display: flex;
-  align-items: center;
+  flex-direction: row;
+  align-items: stretch;
   gap: 10px;
   padding: 10px max(env(safe-area-inset-right), 10px)
     max(env(safe-area-inset-bottom), 10px) max(env(safe-area-inset-left), 10px);
-  background-image: linear-gradient(125deg, #323232 16%, #1d1d1d 100%);
-  border-radius: 10px 10px 0 0;
+  background: #0c0c0c;
+  border-radius: 18px 18px 0 0;
   position: relative;
 }
 
@@ -204,29 +365,27 @@ body {
   position: relative;
   flex: 1 1 0;
   min-width: 0;
-  align-self: stretch;
-  border-radius: 10px;
-  padding: 15px;
-  background-image:
-    repeating-linear-gradient(
-      0deg,
-      rgba(255, 255, 255, 0.02) 0 1px,
-      transparent 1px 20px
-    ),
-    repeating-linear-gradient(
-      90deg,
-      rgba(255, 255, 255, 0.02) 0 1px,
-      transparent 1px 20px
-    ),
-    linear-gradient(to right, #161616, #141414);
+  border-radius: 12px;
+  padding: 14px 16px;
+  min-height: 96px;
   display: flex;
   flex-direction: column;
+  justify-content: center;
+  background-color: #161616;
+  background-image: radial-gradient(
+    rgba(255, 255, 255, 0.06) 1px,
+    transparent 1px
+  );
+  background-size: 10px 10px;
+  background-position: 6px 6px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+  overflow: hidden;
 }
 
 .action-textarea {
   width: 100%;
   flex: 1 1 auto;
-  min-height: 64px;
+  min-height: 68px;
   max-height: 30vh;
   background: transparent;
   border: 0;
@@ -236,252 +395,78 @@ body {
   caret-color: var(--accent);
   font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
   font-weight: 400;
-  font-size: 12px;
-  line-height: 1.5;
-  padding: 0 0 36px 0;
+  font-size: 15px;
+  line-height: 1.45;
+  letter-spacing: 0.01em;
+  padding: 0;
   margin: 0;
-  transition: opacity 280ms ease;
 }
 .action-textarea::placeholder {
-  color: rgba(255, 255, 255, 0.46);
-}
-
-/* ----- recording overlay ---------------------------------------------
-   While recording, the pane lifts out of the tray's flex flow and
-   becomes a 50vh card floating directly above it — without resizing
-   the tray itself, so the terminal area below doesn't reflow. The
-   joystick stays anchored to the right of the (now mostly empty) tray
-   so the user's hold-finger never moves. Keys/actions collapse out;
-   the textarea and interim transcript get larger so dictated text is
-   easy to read. */
-.action-tray[data-recording="true"] {
-  justify-content: flex-end;
-}
-.action-tray[data-recording="true"] .action-pane {
-  position: absolute;
-  z-index: 5;
-  left: max(env(safe-area-inset-left), 10px);
-  right: max(env(safe-area-inset-right), 10px);
-  bottom: calc(100% + 6px);
-  height: 50vh;
-  padding: 18px 18px 18px 18px;
-  box-shadow: 0 -12px 36px rgba(0, 0, 0, 0.55);
-  border: 1px solid rgba(255, 80, 110, 0.35);
-}
-.action-tray[data-recording="true"] .action-textarea {
-  font-size: 16px;
-  line-height: 1.45;
-  max-height: none;
-  padding: 0;
-  opacity: 1;
-}
-.action-tray[data-recording="true"] .action-interim {
-  position: static;
-  margin-top: 0;
-  font-size: 16px;
-  line-height: 1.45;
-  font-style: normal;
-  color: #fff;
-  white-space: pre-wrap;
-  text-overflow: clip;
-  overflow: visible;
-}
-.action-tray[data-recording="true"] .waveform-canvas {
-  inset: 18px;
-}
-.action-tray[data-recording="true"] .action-keys,
-.action-tray[data-recording="true"] .action-actions,
-.action-tray[data-recording="true"] .action-close {
-  display: none;
+  color: rgba(255, 255, 255, 0.42);
 }
 
 .waveform-canvas {
   position: absolute;
-  inset: 15px 15px 47px 15px;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
   pointer-events: none;
 }
 
 .action-interim {
   position: absolute;
-  left: 15px;
-  right: 15px;
-  bottom: 47px;
-  font-size: 11px;
+  left: 16px;
+  right: 16px;
+  bottom: 10px;
+  font-size: 12px;
   color: var(--interim);
   font-style: italic;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   pointer-events: none;
+  z-index: 2;
+}
+/* While recording: textarea steps out of the way entirely so the
+   waveform isn't fighting native form controls (iOS in particular
+   renders textareas above absolutely-positioned siblings). The pane
+   itself grows so the wave has room to breathe; the interim
+   transcript steps forward in white. */
+.action-tray[data-recording="true"] .action-pane {
+  min-height: 132px;
+}
+.action-tray[data-recording="true"] .action-textarea {
+  display: none;
+}
+.action-tray[data-recording="true"] .action-interim {
+  color: rgba(255, 255, 255, 0.9);
+  font-style: normal;
+  font-size: 14px;
 }
 
-/* Row of soft keys pinned to the bottom of the pane. Each chip animates
-   independently (staggered transition-delay) so on entry they cascade
-   in left→right, and on exit they cascade out the same way while
-   squishing scaleX(0.2) — the spirit of the Figma motion sequence
-   without a motion library. The container has no transition itself;
-   it's just a layout box. */
-.action-keys {
-  position: absolute;
-  left: 15px;
-  right: 15px;
-  bottom: 15px;
-  display: flex;
-  gap: 8px;
-}
+/* Right: joystick.
 
-.action-chip {
-  flex: 0 1 62px;
-  min-width: 0;
-  height: 24px;
-  padding: 0 8px;
-  background: #292929;
-  color: #fff;
-  border: 0;
-  border-radius: 5px;
-  font-family: "DM Mono", ui-monospace, "SF Mono", Menlo, monospace;
-  font-weight: 400;
-  font-size: 12px;
-  line-height: 1;
-  letter-spacing: 0.02em;
-  -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
-  user-select: none;
-  cursor: pointer;
-  transform-origin: right center;
-  transition:
-    opacity 400ms ease-in-out,
-    transform 400ms ease-in-out,
-    background-color 120ms ease;
-}
-.action-keys .action-chip:nth-child(1) {
-  transition-delay: 0ms, 0ms, 0ms;
-}
-.action-keys .action-chip:nth-child(2) {
-  transition-delay: 50ms, 50ms, 0ms;
-}
-.action-keys .action-chip:nth-child(3) {
-  transition-delay: 100ms, 100ms, 0ms;
-}
-.action-keys .action-chip:nth-child(4) {
-  transition-delay: 150ms, 150ms, 0ms;
-}
-.action-chip:hover {
-  background: #3a3a3a;
-}
-.action-chip:active {
-  background: #3a3a3a;
-}
-.action-chip[aria-expanded="true"] {
-  background: #3a3a3a;
-}
-
-.action-keys.hidden {
-  pointer-events: none;
-}
-.action-keys.hidden .action-chip {
-  opacity: 0;
-  transform: translateX(30px) scaleX(0.2);
-}
-
-/* The `actions` chip is the recall-the-keys affordance shown while
-   there's draft text. Bottom-right; matches the keys' height. */
-.action-actions {
-  position: absolute;
-  right: 15px;
-  bottom: 15px;
-  height: 24px;
-  padding: 0 14px;
-  min-width: 75px;
-  background: #292929;
-  color: #fff;
-  border: 0;
-  border-radius: 5px;
-  font-family: "DM Mono", ui-monospace, "SF Mono", Menlo, monospace;
-  font-weight: 400;
-  font-size: 12px;
-  line-height: 1;
-  -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
-  cursor: pointer;
-  transform-origin: right bottom;
-  transition:
-    opacity 300ms ease,
-    transform 300ms ease,
-    background-color 120ms ease;
-  transition-delay: 200ms, 200ms, 0ms;
-}
-.action-actions:hover {
-  background: #3a3a3a;
-}
-.action-actions:active {
-  background: #3a3a3a;
-}
-.action-actions.hidden {
-  opacity: 0;
-  transform: scale(0.5);
-  pointer-events: none;
-  transition-delay: 0ms;
-}
-
-.action-close {
-  position: absolute;
-  top: 6px;
-  right: 15px;
-  width: 30px;
-  height: 30px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #292929;
-  color: #fff;
-  border: 0;
-  border-radius: 50%;
-  font-family: "DM Mono", ui-monospace, "SF Mono", Menlo, monospace;
-  font-weight: 400;
-  font-size: 12px;
-  line-height: 1;
-  -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
-  cursor: pointer;
-  transition:
-    opacity 200ms ease,
-    transform 200ms ease,
-    background-color 120ms ease;
-}
-.action-close:hover {
-  background: #3a3a3a;
-}
-.action-close:active {
-  background: #3a3a3a;
-}
-.action-close.hidden {
-  opacity: 0;
-  transform: scale(0.5);
-  pointer-events: none;
-}
-
-/* ----- joystick rail (mic / send / directional indicator) ------------- */
-
+   Circle-within-circle: an outer sunken ring (joystick-base) is the
+   visible movement area; an inner circular knob with a purple
+   gradient outline translates inside it toward the drag direction.
+   The rail's own height matches the ring; the surrounding tray
+   provides padding above and below for the knob to translate into. */
 .joystick-rail {
   position: relative;
-  flex: 0 0 64px;
-  width: 64px;
-  height: 92px;
+  width: 72px;
+  flex: 0 0 72px;
+  align-self: center;
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: visible;
 }
 
-/* The ring is the gesture target. Inside it sit two stacked visuals:
-   .joystick-base is the static "housing" collar — a sunken socket —
-   and .joystick-knob is the moveable cap that tips toward the drag
-   direction. The knob's translation is the only directional indicator
-   now that the arrows are gone. */
 .joystick-ring {
   position: relative;
-  width: 62px;
-  height: 62px;
+  width: 72px;
+  height: 72px;
   border-radius: 50%;
   touch-action: none;
   -webkit-tap-highlight-color: transparent;
@@ -511,8 +496,8 @@ body {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 50px;
-  height: 50px;
+  width: 56px;
+  height: 56px;
   padding: 2px;
   border-radius: 50%;
   box-sizing: border-box;
@@ -529,7 +514,9 @@ body {
 .joystick-ring[data-state="pressed"] .joystick-knob {
   transform: translate(-50%, -50%) scale(0.95);
 }
-.joystick-knob[data-recording="true"] {
+
+/* Recording: shift the knob's outline to the warm gradient and pulse. */
+.joystick-ring[data-recording="true"] .joystick-knob {
   background: linear-gradient(135deg, #ff0040 0%, #ff5a78 50%, #ff0040 100%);
   animation: joystickGlow 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
@@ -562,10 +549,14 @@ body {
   background: #161616;
 }
 
-.joystick-icon {
-  width: 25px;
-  height: 25px;
+.glyph {
+  width: 22px;
+  height: 22px;
   display: block;
+}
+.joystick-button .glyph {
+  width: 22px;
+  height: 22px;
 }
 
 /* ----- disconnect overlay --------------------------------------------- */

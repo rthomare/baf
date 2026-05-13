@@ -1,44 +1,30 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useSessionActions, useSessionState } from "../SessionContext";
 import { useJoystick, type Dir } from "../useJoystick";
 import { getVoice } from "../voice-singleton";
 import { pressKey } from "../actions";
 import { Waveform } from "./Waveform";
 
-// One panel: gradient pane with a textarea on the left and a single
-// circular mic/send button on the right that doubles as the joystick.
-// Soft keys (ctrl-c / esc / tab / …) sit at the bottom of the textarea
-// pane. When the composer has text, the keys collapse and an
-// `actions` chip + close `x` take over; tapping `actions` brings the
-// keys back so they're still reachable mid-draft.
+// One horizontal row: content pane on the left, joystick on the right.
+// The pane holds the textarea normally; while recording, the textarea
+// hides and the waveform canvas takes the pane. The joystick keeps
+// tap=commit, drag=arrows, hold=record. Its glyph swaps to a send
+// arrow when the draft has text, otherwise a mic.
 
-interface Props {
-  onToggleOverflow: () => void;
-  overflowOpen: boolean;
-}
-
-export function ActionTray({ onToggleOverflow, overflowOpen }: Props) {
-  const { draft, interim, recording, historyCursor, history } = useSessionState();
+export function ActionTray() {
+  const { draft, interim, recording, historyCursor, history } =
+    useSessionState();
   const actions = useSessionActions();
   const taRef = useRef<HTMLTextAreaElement>(null);
-  const [keysExpanded, setKeysExpanded] = useState(false);
   const hasText = draft.trim().length > 0;
-  const showKeys = !hasText || keysExpanded;
 
-  // Auto-grow the textarea up to a cap. The pane keeps a stable height,
-  // so the textarea grows inside it without pushing layout. While
-  // recording the pane lifts into a 50vh overlay and the textarea
-  // fills it via CSS, so we hand height back to the stylesheet.
+  // Auto-grow the textarea up to a cap.
   useEffect(() => {
     const el = taRef.current;
     if (!el) return;
-    if (recording) {
-      el.style.height = "";
-      return;
-    }
     el.style.height = "auto";
     el.style.height = Math.min(el.scrollHeight, 200) + "px";
-  }, [draft, recording]);
+  }, [draft]);
 
   // After history scrub, push the caret to end.
   useEffect(() => {
@@ -46,12 +32,6 @@ export function ActionTray({ onToggleOverflow, overflowOpen }: Props) {
     if (!el || document.activeElement !== el) return;
     el.setSelectionRange(el.value.length, el.value.length);
   }, [historyCursor]);
-
-  // Collapse the keys whenever the draft becomes empty so the next
-  // empty-state shows them again without a stale expanded flag.
-  useEffect(() => {
-    if (!hasText) setKeysExpanded(false);
-  }, [hasText]);
 
   // Joystick: all 4 arrows go to the PTY.
   const fireDir = (dir: Dir) => {
@@ -86,11 +66,6 @@ export function ActionTray({ onToggleOverflow, overflowOpen }: Props) {
     rootProps.onPointerDown(e);
   };
 
-  const onKeyChip = (k: string) => {
-    pressKey(k);
-    if (keysExpanded) setKeysExpanded(false);
-  };
-
   return (
     <div className="action-tray" data-recording={recording}>
       <div className="action-pane">
@@ -104,10 +79,11 @@ export function ActionTray({ onToggleOverflow, overflowOpen }: Props) {
           autoCorrect="off"
           autoCapitalize="off"
           spellCheck={false}
-          placeholder={recording ? "" : "Start typing, joystick, or hold down to record."}
+          placeholder={
+            recording ? "" : "Type, or hold the joystick to record."
+          }
           aria-label="command draft"
           value={draft}
-          data-recording={recording}
           onChange={(e) => actions.setDraft(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
@@ -135,71 +111,9 @@ export function ActionTray({ onToggleOverflow, overflowOpen }: Props) {
           }}
         />
 
-        <Waveform active={recording} />
+        <Waveform active={recording} useMic={recording} />
 
         <div className="action-interim" aria-live="polite">{interim}</div>
-
-        <div className={`action-keys${showKeys ? "" : " hidden"}`} role="toolbar" aria-label="terminal shortcuts">
-          <button
-            type="button"
-            className="action-chip"
-            data-key="ctrl-c"
-            onClick={() => onKeyChip("ctrl-c")}
-            tabIndex={showKeys ? 0 : -1}
-          >
-            ctrl-c
-          </button>
-          <button
-            type="button"
-            className="action-chip"
-            data-key="esc"
-            onClick={() => onKeyChip("esc")}
-            tabIndex={showKeys ? 0 : -1}
-          >
-            esc
-          </button>
-          <button
-            type="button"
-            className="action-chip"
-            data-key="tab"
-            onClick={() => onKeyChip("tab")}
-            tabIndex={showKeys ? 0 : -1}
-          >
-            tab
-          </button>
-          <button
-            id="more-toggle"
-            type="button"
-            className="action-chip"
-            data-key="more"
-            aria-expanded={overflowOpen}
-            aria-label="more keys"
-            onClick={onToggleOverflow}
-            tabIndex={showKeys ? 0 : -1}
-          >
-            …
-          </button>
-        </div>
-
-        <button
-          type="button"
-          className={`action-actions${hasText && !keysExpanded ? "" : " hidden"}`}
-          aria-label="show shortcut keys"
-          onClick={() => setKeysExpanded(true)}
-          tabIndex={hasText && !keysExpanded ? 0 : -1}
-        >
-          actions
-        </button>
-
-        <button
-          type="button"
-          className={`action-close${hasText ? "" : " hidden"}`}
-          aria-label="clear draft"
-          onClick={() => actions.clearDraft()}
-          tabIndex={hasText ? 0 : -1}
-        >
-          ×
-        </button>
       </div>
 
       <div className="joystick-rail">
@@ -218,7 +132,7 @@ export function ActionTray({ onToggleOverflow, overflowOpen }: Props) {
           onPointerDown={onJoystickPointerDown}
         >
           <div className="joystick-base" aria-hidden="true" />
-          <div className="joystick-knob" ref={knobRef} data-recording={recording}>
+          <div className="joystick-knob" ref={knobRef}>
             <div className="joystick-button">
               {hasText ? <SendGlyph /> : <MicGlyph />}
             </div>
@@ -231,7 +145,7 @@ export function ActionTray({ onToggleOverflow, overflowOpen }: Props) {
 
 function MicGlyph() {
   return (
-    <svg className="joystick-icon" viewBox="0 0 25 25" aria-hidden="true">
+    <svg className="glyph" viewBox="0 0 25 25" aria-hidden="true">
       <path
         fillRule="evenodd"
         clipRule="evenodd"
@@ -244,7 +158,7 @@ function MicGlyph() {
 
 function SendGlyph() {
   return (
-    <svg className="joystick-icon" viewBox="0 0 15 20" aria-hidden="true">
+    <svg className="glyph" viewBox="0 0 15 20" aria-hidden="true">
       <path
         fillRule="evenodd"
         clipRule="evenodd"

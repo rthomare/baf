@@ -8,6 +8,7 @@ import { BottomPanel } from "./components/BottomPanel";
 import { StatusOverlay } from "./components/StatusOverlay";
 import { RawTerminal } from "./components/RawTerminal";
 import { ScrollBottomButton } from "./components/ScrollBottomButton";
+import { FloatingSettings } from "./components/FloatingSettings";
 
 function Shell() {
   const { status } = useTransport();
@@ -55,6 +56,7 @@ function Shell() {
           <RawTerminal />
         </span>
         <ScrollBottomButton />
+        <FloatingSettings />
       </div>
       <span
         style={{

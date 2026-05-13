@@ -8,32 +8,35 @@ interface Props {
 }
 
 const KEYS: Array<{ key: string; label: string }> = [
-  { key: "ctrl-d", label: "Ctrl-D" },
-  { key: "ctrl-l", label: "Ctrl-L" },
-  { key: "ctrl-z", label: "Ctrl-Z" },
-  { key: "ctrl-r", label: "Ctrl-R" },
-  { key: "ctrl-u", label: "Ctrl-U" },
-  { key: "ctrl-w", label: "Ctrl-W" },
-  { key: "home", label: "Home" },
-  { key: "end", label: "End" },
-  { key: "pageup", label: "PgUp" },
-  { key: "pagedown", label: "PgDn" },
+  { key: "ctrl-c", label: "ctrl-c" },
+  { key: "esc", label: "esc" },
+  { key: "tab", label: "tab" },
+  { key: "ctrl-d", label: "ctrl-d" },
+  { key: "ctrl-l", label: "ctrl-l" },
+  { key: "ctrl-z", label: "ctrl-z" },
+  { key: "ctrl-r", label: "ctrl-r" },
+  { key: "ctrl-u", label: "ctrl-u" },
+  { key: "ctrl-w", label: "ctrl-w" },
+  { key: "home", label: "home" },
+  { key: "end", label: "end" },
+  { key: "pageup", label: "pgup" },
+  { key: "pagedown", label: "pgdn" },
 ];
 
 export function Overflow({ open, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const { leave } = useTransport();
 
-  // Click anywhere outside the panel (and outside the more-toggle that
-  // opens it) closes it. The more-toggle's own click is allowed through
-  // so it can drive the open/close itself.
+  // Click anywhere outside the panel (and outside the settings button
+  // that opens it) closes it. The settings button's own click is
+  // allowed through so it can drive the open/close itself.
   useEffect(() => {
     if (!open) return;
     const onDocClick = (ev: MouseEvent) => {
       const t = ev.target as Node;
       if (ref.current?.contains(t)) return;
-      const more = document.getElementById("more-toggle");
-      if (more?.contains(t)) return;
+      const settings = document.getElementById("settings-toggle");
+      if (settings?.contains(t)) return;
       onClose();
     };
     document.addEventListener("click", onDocClick);
@@ -46,12 +49,35 @@ export function Overflow({ open, onClose }: Props) {
   };
 
   return (
-    <div id="overflow" ref={ref} hidden={!open} role="menu">
+    <div
+      id="overflow"
+      ref={ref}
+      data-open={open}
+      role="menu"
+      aria-hidden={!open}
+    >
+      <div className="overflow-keys">
+        {KEYS.map(({ key, label }) => (
+          <button
+            key={key}
+            type="button"
+            data-key={key}
+            tabIndex={open ? 0 : -1}
+            onClick={() => onClick(key)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
       <div className="overflow-actions">
+        <span className="overflow-hint" aria-hidden="true">
+          shortcuts
+        </span>
         <button
           id="leave"
           type="button"
           aria-label="disconnect from this session"
+          tabIndex={open ? 0 : -1}
           onClick={() => {
             onClose();
             leave();
@@ -59,13 +85,6 @@ export function Overflow({ open, onClose }: Props) {
         >
           leave
         </button>
-      </div>
-      <div className="overflow-keys">
-        {KEYS.map(({ key, label }) => (
-          <button key={key} data-key={key} onClick={() => onClick(key)}>
-            {label}
-          </button>
-        ))}
       </div>
     </div>
   );
