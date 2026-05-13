@@ -270,6 +270,15 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 			_ = conn.Write(ctx, websocket.MessageText, payload)
 		}
 	}
+	// Cap the replay with an explicit envelope. Replayed bytes may
+	// contain DA / DSR / DECRQM queries from prior commands; xterm.js
+	// parses them and writes responses via term.onData, which the
+	// client would otherwise forward right back to the PTY. The client
+	// uses this marker to mute outbound terminal-protocol responses
+	// until the replay window is over.
+	if payload, err := json.Marshal(ctrlMsg{Type: "replay-end"}); err == nil {
+		_ = conn.Write(ctx, websocket.MessageText, payload)
+	}
 
 	// PTY → WS (binary frames)
 	go func() {

@@ -15,10 +15,14 @@ type OutboundControl =
 // whenever the host resizes. history-start / history-end bracket a
 // stretch of binary frames that carry the older scrollback — the client
 // parses them as a separate stream and prepends the resulting blocks.
+// replay-end signals that the tail+history phase is done; xterm.js's
+// outbound terminal-protocol responses (DA/DSR/DECRPM) are muted while
+// replay is in progress so stale embedded queries don't echo to the PTY.
 export type InboundControl =
   | { type: "geometry"; cols: number; rows: number }
   | { type: "history-start" }
-  | { type: "history-end" };
+  | { type: "history-end" }
+  | { type: "replay-end" };
 
 export type Status = "connecting" | "open" | "closed" | "error";
 

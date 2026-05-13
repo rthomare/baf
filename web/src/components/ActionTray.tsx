@@ -67,8 +67,9 @@ export function ActionTray() {
   // here makes the dismissal our action, not the system's, so the very
   // first tap reaches the joystick.
   const onJoystickPointerDown = (e: React.PointerEvent) => {
-    const ta = taRef.current;
-    if (ta && document.activeElement === ta) ta.blur();
+    // note this workaround was just turned off.
+    // const ta = taRef.current;
+    // if (ta && document.activeElement === ta) ta.blur();
     rootProps.onPointerDown(e);
   };
 

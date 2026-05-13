@@ -6,6 +6,7 @@ import { useEffect, useRef } from "react";
 import { getTransport } from "../transport";
 import { getXterm } from "../xterm-singleton";
 import { useTransport } from "../useTransport";
+import { isInReplay } from "../replay-window";
 
 const FONT = 14;
 const CELL_W_RATIO = 0.6;
@@ -40,7 +41,15 @@ export function RawTerminal() {
     if (!host) return;
     const xt = getXterm();
     xt.attach(host);
-    xt.onData((d) => getTransport().send(enc.encode(d)));
+    xt.onData((d) => {
+      // Mute outbound terminal-protocol responses while the replay
+      // window is open. Replayed bytes can contain DA/DSR/DECRQM
+      // queries from prior programs; xterm parses them and emits
+      // responses here. Forwarding those to the PTY ends up as user
+      // input at zsh's prompt ("command not found: 1", "2c2e026;0$y").
+      if (isInReplay()) return;
+      getTransport().send(enc.encode(d));
+    });
   }, []);
 
   useEffect(() => {
