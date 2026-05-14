@@ -395,8 +395,11 @@ phone — the replayed history bytes are dropped on arrival.
 
 ## 2026-05-13 — Distribution via Homebrew tap (GoReleaser-driven)
 
-`brew install rthomare/baf/baf` is the supported install path.
-Mechanics:
+A one-time `brew tap rthomare/baf` followed by `brew install baf` is
+the supported install path. After the tap is registered the install
+command is unqualified — Homebrew's resolver searches tapped repos
+for an exact-name match when no homebrew-core formula exists. License
+is Apache-2.0 (LICENSE file at repo root). Mechanics:
 
 - `.goreleaser.yaml` cross-compiles `baf` for darwin/linux × amd64/arm64
   with `CGO_ENABLED=0`, after a `before:hooks` step that runs
@@ -436,6 +439,13 @@ Mechanics:
   and can't push to `homebrew-baf`. Documented in `RELEASING.md`.
 - Tap users on Linux can install via Homebrew on Linux but the binary
   has only been smoke-tested on macOS so far.
+- The unqualified `brew install baf` only works after the user has run
+  `brew tap rthomare/baf` once. Submitting the formula to
+  `Homebrew/homebrew-core` would make the tap step unnecessary, but
+  that's gated on notability (~30 forks / 30 watchers / 75 stars per
+  Homebrew's acceptable-formulae rules) which the project doesn't yet
+  meet. Revisit when the metrics are there; the formula GoReleaser
+  emits today is a reasonable starting point.
 
 ## 2026-05-10 — Stack summary
 

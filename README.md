@@ -8,10 +8,12 @@ Wi-Fi. Type on your laptop or your phone; both stay in sync.
 ## Install
 
 ```sh
-brew install rthomare/baf/baf
+brew tap rthomare/baf
+brew install baf
 ```
 
 That's it. No Go, no Node, no clone — just a single binary on `PATH`.
+After the one-time tap, future updates are just `brew upgrade baf`.
 
 > Don't have Homebrew? Grab a binary from the
 > [latest release](https://github.com/rthomare/baf/releases/latest), or

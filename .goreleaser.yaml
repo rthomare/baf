@@ -69,7 +69,7 @@ brews:
   - name: baf
     description: Mirror your terminal session onto your phone over the local Wi-Fi.
     homepage: https://github.com/rthomare/baf
-    license: MIT
+    license: Apache-2.0
     repository:
       owner: rthomare
       name: homebrew-baf

@@ -62,9 +62,14 @@ green, verify:
 
 ```sh
 brew update
-brew install rthomare/baf/baf
-baf --version    # should print: baf v0.1.0
+brew tap rthomare/baf      # one-time, no-op on subsequent releases
+brew install baf           # or `brew upgrade baf` if already installed
+baf --version              # should print: baf v0.1.0
 ```
+
+After the tap is registered locally, `brew install baf` resolves
+unqualified — Homebrew searches your tapped repos for an exact-name
+match when no `homebrew-core` formula exists by that name.
 
 If something went wrong, you can re-run the workflow after pushing the
 fix and force-moving the tag (`git tag -f vX.Y.Z && git push -f origin
