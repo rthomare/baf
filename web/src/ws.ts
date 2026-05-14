@@ -11,6 +11,22 @@ type OutboundControl =
   | { type: "override-geometry"; cols: number; rows: number }
   | { type: "release-geometry" };
 
+// A single project command as parsed from the host's .baf/config.toml.
+// The host derives `id` deterministically from name+run so React keys
+// stay stable across reconnects.
+export interface ProjectCommand {
+  id: string;
+  name: string;
+  run: string;
+  description?: string;
+}
+
+export interface Project {
+  root: string;
+  name: string;
+  commands: ProjectCommand[];
+}
+
 // Inbound control messages. The server pushes geometry on connect and
 // whenever the host resizes. history-start / history-end bracket a
 // stretch of binary frames that carry the older scrollback — the client
@@ -18,11 +34,13 @@ type OutboundControl =
 // replay-end signals that the tail+history phase is done; xterm.js's
 // outbound terminal-protocol responses (DA/DSR/DECRPM) are muted while
 // replay is in progress so stale embedded queries don't echo to the PTY.
+// project carries the discovered .baf/config.toml (or null when none).
 export type InboundControl =
   | { type: "geometry"; cols: number; rows: number }
   | { type: "history-start" }
   | { type: "history-end" }
-  | { type: "replay-end" };
+  | { type: "replay-end" }
+  | { type: "project"; project: Project | null };
 
 export type Status = "connecting" | "open" | "closed" | "error";
 

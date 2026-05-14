@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { pressKey } from "../actions";
 import { useTransport } from "../useTransport";
+import { useSessionActions, useSessionState } from "../SessionContext";
 
 interface Props {
   open: boolean;
@@ -26,6 +27,8 @@ const KEYS: Array<{ key: string; label: string }> = [
 export function Overflow({ open, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const { leave } = useTransport();
+  const { project } = useSessionState();
+  const sessionActions = useSessionActions();
 
   // Click anywhere outside the panel (and outside the settings button
   // that opens it) closes it. The settings button's own click is
@@ -48,6 +51,11 @@ export function Overflow({ open, onClose }: Props) {
     onClose();
   };
 
+  const onCommand = (run: string) => {
+    sessionActions.runProjectCommand(run);
+    onClose();
+  };
+
   return (
     <div
       id="overflow"
@@ -56,6 +64,30 @@ export function Overflow({ open, onClose }: Props) {
       role="menu"
       aria-hidden={!open}
     >
+      {project && project.commands.length > 0 && (
+        <section className="overflow-project" aria-label="project commands">
+          <header className="overflow-section-header">
+            <span className="overflow-section-title">{project.name}</span>
+          </header>
+          <ul className="overflow-commands">
+            {project.commands.map((cmd) => (
+              <li key={cmd.id}>
+                <button
+                  type="button"
+                  className="overflow-command"
+                  tabIndex={open ? 0 : -1}
+                  onClick={() => onCommand(cmd.run)}
+                >
+                  <span className="overflow-command-name">{cmd.name}</span>
+                  <span className="overflow-command-run">
+                    {cmd.description ?? cmd.run}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <div className="overflow-keys">
         {KEYS.map(({ key, label }) => (
           <button

@@ -1,0 +1,30 @@
+# Project commands surfaced in baf's settings menu (the sliders panel on
+# the mobile UI). Tapping a command sends `run + Enter` into the PTY,
+# i.e. exactly what you'd type at the prompt. Keep these short and
+# task-shaped.
+#
+# Schema:
+#   [[command]]
+#   name        = "label shown in the menu"
+#   run         = "command sent to the shell"
+#   description = "optional subtitle"
+
+[[command]]
+name = "go test"
+run  = "go test ./..."
+description = "run the full test suite"
+
+[[command]]
+name = "build everything"
+run  = "make build"
+description = "web UI + Go binary"
+
+[[command]]
+name = "build web"
+run  = "make web"
+description = "rebuild the embedded UI bundle"
+
+[[command]]
+name = "dev mode"
+run  = "make dev"
+description = "vite HMR proxied through baf"

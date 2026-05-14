@@ -146,6 +146,39 @@ A single bottom panel handles all input:
   `Ctrl-R`, `Ctrl-U`, `Ctrl-W`, `Home`, `End`, `PgUp`, `PgDn`.
 - The **mode bar** holds a `leave` button that disconnects this device.
 
+## Project commands
+
+If baf finds a `.baf/config.toml` in the current directory or any
+ancestor when it starts, the commands declared there show up at the top
+of the mobile settings menu (the sliders button in the top-right of the
+screen). Tap one and it's typed into the shell for you, just like you'd
+type it at the prompt.
+
+```toml
+# .baf/config.toml
+[[command]]
+name        = "run tests"
+run         = "make test"
+description = "full suite"           # optional
+
+[[command]]
+name = "lint"
+run  = "make lint"
+```
+
+Two things worth knowing:
+
+- The `run` string is sent verbatim into your shell with a trailing
+  Enter. It's not run in a sandbox; the same `.baf/config.toml` could
+  type anything you can. Treat it the way you treat a project's
+  `Makefile` or `.envrc` — only `baf` inside a repo if you'd run its
+  scripts.
+- Discovery walks upward, first match wins. If you have a personal
+  `~/.baf/config.toml` and a project-local one, the project's wins
+  whenever you're inside it.
+
+A worked example lives at this repo's own [`.baf/config.toml`](.baf/config.toml).
+
 ## Wire protocol
 
 WebSocket at `/api/ws`, gated by the session cookie set during `/?t=<token>`.
@@ -154,6 +187,9 @@ WebSocket at `/api/ws`, gated by the session cookie set during `/?t=<token>`.
 - Text frames: JSON control messages.
   - Server → client: `{"type":"geometry","cols":N,"rows":M}` on connect
     and every host SIGWINCH.
+  - Server → client: `{"type":"project","project":{...}|null}` on
+    connect — carries the discovered `.baf/config.toml` (or `null`)
+    so the mobile settings menu has commands to render.
   - Client → server: `{"type":"ping"}` keepalive.
   - Client → server: `{"type":"override-geometry","cols":N,"rows":M}`
     when raw view wants the PTY reflowed for the phone, and

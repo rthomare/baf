@@ -7,7 +7,9 @@
 //   GET /            → serves the embedded UI (gated by session cookie).
 //   GET /api/ws      → WebSocket upgrade (gated by session cookie).
 //                      Binary frames = raw PTY bytes both directions.
-//                      Text frames = JSON control messages (resize, ping).
+//                      Text frames = JSON control messages (geometry,
+//                      project, history-start/end, replay-end, ping,
+//                      override-geometry, release-geometry).
 package server
 
 import (
@@ -29,6 +31,7 @@ import (
 
 	"github.com/coder/websocket"
 
+	"github.com/rohanthomare/baf/internal/project"
 	"github.com/rohanthomare/baf/internal/pty"
 )
 
@@ -45,6 +48,7 @@ type Config struct {
 	UIFS      fs.FS           // embedded web/dist (production)
 	DevProxy  string          // if non-empty, proxy UI requests here (e.g. "http://localhost:5173") instead of serving UIFS
 	Session   *pty.Session
+	Project   *project.Project // optional .baf/config.toml the server pushes to the client on connect
 	OnFirstClient func()      // optional, called the first time a remote attaches
 }
 
@@ -252,6 +256,14 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	})
 	defer cancelGeom()
 
+	// Push the discovered .baf/config.toml (or null) so the client's
+	// settings sheet has commands to render before the first input.
+	// The client treats this as authoritative; subsequent reloads would
+	// arrive via the same frame (not implemented yet).
+	if payload, err := json.Marshal(projectMsg{Type: "project", Project: s.cfg.Project}); err == nil {
+		_ = conn.Write(ctx, websocket.MessageText, payload)
+	}
+
 	// Initial replay, sent before starting the live drain so its frames
 	// land first on the wire. Order: tail (binary) → history-start (text)
 	// → history (binary) → history-end (text). The client builds its
@@ -326,6 +338,15 @@ type ctrlMsg struct {
 	Type string `json:"type"`
 	Cols uint16 `json:"cols,omitempty"`
 	Rows uint16 `json:"rows,omitempty"`
+}
+
+// projectMsg carries the discovered .baf/config.toml payload to the
+// client. The pointer is preserved so the JSON is `null` (not an empty
+// object) when there is no project — the client distinguishes "no
+// project here" from "project with zero commands".
+type projectMsg struct {
+	Type    string           `json:"type"`
+	Project *project.Project `json:"project"`
 }
 
 // NewToken generates a short URL-safe token for the one-time login link.
