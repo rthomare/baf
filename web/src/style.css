@@ -513,6 +513,92 @@ body {
   overflow-x: hidden;
 }
 
+/* Pending-voice banner — sits above the textarea while a dictated
+   transcript awaits Confirm/Discard. The text is shown verbatim and
+   wraps; the two chips align right so they don't shift around as the
+   text grows. */
+.action-pending {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 8px;
+  margin: 4px 4px 0 4px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.action-pending-text {
+  font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.78);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.action-pending-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+/* Restore chip — surfaces when a non-composer keystroke wiped the
+   draft and the user has the option to bring those bytes back. Quiet
+   styling so it doesn't compete with the live composer. */
+.action-restore {
+  display: flex;
+  padding: 4px 4px 0 4px;
+  margin: 0 4px;
+}
+
+/* Shared chip styling for the confirm/discard/restore controls. */
+.action-chip {
+  height: 24px;
+  padding: 0 10px;
+  background: #161616;
+  color: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  font-family: "DM Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease,
+    border-color 120ms ease;
+}
+.action-chip:hover {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.16);
+}
+.action-chip:active {
+  background: #1f1f1f;
+}
+.action-chip-confirm {
+  color: var(--accent);
+  border-color: rgba(97, 175, 239, 0.32);
+}
+.action-chip-confirm:hover {
+  color: var(--accent);
+  border-color: rgba(97, 175, 239, 0.55);
+}
+.action-chip-discard {
+  color: rgba(224, 108, 117, 0.85);
+  border-color: rgba(224, 108, 117, 0.22);
+}
+.action-chip-discard:hover {
+  color: var(--danger);
+  border-color: rgba(224, 108, 117, 0.42);
+}
+.action-chip-restore {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .action-textarea,
 .action-interim {
   width: 100%;

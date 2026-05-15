@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { pressKey } from "../actions";
 import { useTransport } from "../useTransport";
 import { useSessionActions, useSessionState } from "../SessionContext";
 
@@ -83,7 +82,7 @@ export function Overflow({ open, onClose }: Props) {
   }, [sources, filter]);
 
   const onClick = (key: string) => {
-    pressKey(key);
+    sessionActions.pressKey(key);
     onClose();
   };
 

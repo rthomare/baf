@@ -32,6 +32,14 @@ function preferredRawGeometry(): { cols: number; rows: number } {
 
 const enc = new TextEncoder();
 
+function isProtocolResponse(d: string): boolean {
+  if (d.length < 2 || d.charCodeAt(0) !== 0x1b) return false;
+  const c = d.charCodeAt(1);
+  // `[` = CSI, `]` = OSC, `P` = DCS — the families xterm uses for
+  // capability-query replies.
+  return c === 0x5b || c === 0x5d || c === 0x50;
+}
+
 export function RawTerminal() {
   const hostRef = useRef<HTMLDivElement>(null);
   const { status } = useTransport();
@@ -42,15 +50,25 @@ export function RawTerminal() {
     const xt = getXterm();
     xt.attach(host);
     xt.onData((d) => {
-      // Mute outbound terminal-protocol responses while the replay
-      // window is open. Replayed bytes can contain DA/DSR/DECRQM
-      // queries from prior programs; xterm parses them and emits
-      // responses here. Forwarding those to the PTY ends up as user
-      // input at zsh's prompt ("command not found: 1", "2c2e026;0$y").
+      // The composer is the only typing surface on this client — user
+      // input that lands at xterm (physical keyboard, paste, etc.)
+      // does NOT reach the PTY. We still forward CSI/OSC sequences
+      // because those are responses xterm generates in answer to
+      // terminal-capability queries (DA/DSR/DECRQM) issued by
+      // programs running in the PTY; muting them breaks vim and
+      // friends.
       if (isInReplay()) return;
+      if (!isProtocolResponse(d)) return;
       getTransport().send(enc.encode(d));
     });
   }, []);
+
+  // A "protocol response" looks like ESC followed by `[` (CSI), `]`
+  // (OSC), or `P` (DCS). Plain typed input — letters, Enter (`\r`),
+  // Tab (`\t`), backspace (`\x7f`) — fails this test and is dropped.
+  // Arrow keys typed on a physical keyboard would slip through
+  // (`\x1b[A`), but the mobile UI doesn't expect physical keyboards,
+  // and the joystick path is the supported way to send arrows.
 
   useEffect(() => {
     if (status !== "open") return;

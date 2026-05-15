@@ -2,7 +2,6 @@ import { useEffect, useRef } from "react";
 import { useSessionActions, useSessionState } from "../SessionContext";
 import { useJoystick, type Dir } from "../useJoystick";
 import { getVoice } from "../voice-singleton";
-import { pressKey } from "../actions";
 import { Waveform } from "./Waveform";
 
 // One horizontal row: content pane on the left, joystick on the right.
@@ -10,13 +9,28 @@ import { Waveform } from "./Waveform";
 // hides and the waveform canvas takes the pane. The joystick keeps
 // tap=commit, drag=arrows, hold=record. Its glyph swaps to a send
 // arrow when the draft has text, otherwise a mic.
+//
+// Two transient affordances sit above the textarea:
+//   - a pending-voice banner (Confirm / Discard) when there's a
+//     dictated transcript awaiting OK from the user;
+//   - a "restore" chip when the draft was wiped by a non-composer
+//     keystroke and the user has the option to re-stream it.
 
 export function ActionTray() {
-  const { draft, interim, recording, historyCursor, history } =
-    useSessionState();
+  const {
+    draft,
+    interim,
+    recording,
+    historyCursor,
+    history,
+    pendingVoice,
+    stashedDraft,
+  } = useSessionState();
   const actions = useSessionActions();
   const taRef = useRef<HTMLTextAreaElement>(null);
   const hasText = draft.trim().length > 0;
+  const hasPending = pendingVoice.length > 0;
+  const canRestore = draft === "" && stashedDraft !== null && stashedDraft !== "";
 
   useEffect(() => {
     document
@@ -39,9 +53,10 @@ export function ActionTray() {
     el.setSelectionRange(el.value.length, el.value.length);
   }, [historyCursor]);
 
-  // Joystick: all 4 arrows go to the PTY.
+  // Joystick: arrows go to the PTY via pressKey, which also stashes
+  // the draft so the user can restore.
   const fireDir = (dir: Dir) => {
-    pressKey(dir);
+    actions.pressKey(dir);
   };
 
   const { state, knobRef, rootProps } = useJoystick({
@@ -76,6 +91,47 @@ export function ActionTray() {
   return (
     <div className="action-tray" data-recording={recording}>
       <div className="action-pane">
+        {hasPending && (
+          <div
+            className="action-pending"
+            role="region"
+            aria-label="voice transcript awaiting confirmation"
+          >
+            <div className="action-pending-text">{pendingVoice}</div>
+            <div className="action-pending-actions">
+              <button
+                type="button"
+                className="action-chip action-chip-confirm"
+                onClick={() => actions.confirmPendingVoice()}
+                aria-label="confirm voice transcript"
+              >
+                confirm
+              </button>
+              <button
+                type="button"
+                className="action-chip action-chip-discard"
+                onClick={() => actions.discardPendingVoice()}
+                aria-label="discard voice transcript"
+              >
+                discard
+              </button>
+            </div>
+          </div>
+        )}
+
+        {!hasPending && canRestore && (
+          <div className="action-restore">
+            <button
+              type="button"
+              className="action-chip action-chip-restore"
+              onClick={() => actions.restoreDraft()}
+              aria-label="restore the draft that was cleared"
+            >
+              ↺ restore “{stashedDraft}”
+            </button>
+          </div>
+        )}
+
         <textarea
           ref={taRef}
           id="composer"
