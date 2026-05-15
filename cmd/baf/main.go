@@ -22,6 +22,7 @@ import (
 
 	"golang.org/x/term"
 
+	"github.com/rohanthomare/baf/internal/project"
 	"github.com/rohanthomare/baf/internal/pty"
 	"github.com/rohanthomare/baf/internal/qr"
 	"github.com/rohanthomare/baf/internal/server"
@@ -138,15 +139,26 @@ func run() error {
 		_ = sess.Close()
 	}()
 
+	home, err := os.UserHomeDir()
+	if err != nil {
+		home = "."
+	}
+
+	// Discover every .baf/config.toml from cwd up to /, plus the
+	// optional global at $HOME/.baf/config.toml. Per-file parse errors
+	// don't abort discovery; we log them and use whatever sources did
+	// parse. A nil project just means "no commands to show."
+	cwd, _ := os.Getwd()
+	proj, projErr := project.Discover(cwd, home)
+	if projErr != nil {
+		fmt.Fprintln(os.Stderr, "baf: project config:", projErr)
+	}
+
 	// Configure the network side.
 	lanIP := server.LANIP()
 	port, err := pickPort(lanIP, defaultPort)
 	if err != nil {
 		return err
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		home = "."
 	}
 	cert, err := tlsgen.LoadOrCreate(filepath.Join(home, ".baf"), lanIP)
 	if err != nil {
@@ -165,6 +177,7 @@ func run() error {
 		UIFS:     webfs.FS(),
 		DevProxy: os.Getenv("BAF_DEV"),
 		Session:  sess,
+		Project:  proj,
 	})
 	if err != nil {
 		return err
@@ -176,7 +189,7 @@ func run() error {
 	// Print the QR + URL to the local terminal *before* raw mode would
 	// have eaten the newlines. We're already in raw mode, so write CRLF
 	// terminators explicitly.
-	printBanner(os.Stdout, url, os.Getenv("BAF_DEV"))
+	printBanner(os.Stdout, url, os.Getenv("BAF_DEV"), proj)
 
 	srvErr := make(chan error, 1)
 	go func() { srvErr <- srv.Run(ctx) }()
@@ -218,7 +231,7 @@ func pickPort(ip net.IP, pref int) (int, error) {
 
 // printBanner writes the connection info above the prompt. We're already
 // in raw mode by the time this is called, so use CRLF.
-func printBanner(w io.Writer, url, devProxy string) {
+func printBanner(w io.Writer, url, devProxy string, proj *project.Project) {
 	const dim = "\x1b[2m"
 	const reset = "\x1b[0m"
 	const bold = "\x1b[1m"
@@ -228,12 +241,33 @@ func printBanner(w io.Writer, url, devProxy string) {
 	fmt.Fprintf(w, "%s│%s %s%s%s\r\n", dim, reset, bold, url, reset)
 	fmt.Fprintf(w, "%s│%s (single-use link — token consumed on first scan)\r\n", dim, reset)
 	fmt.Fprintf(w, "%s│%s quit: %sbaf-quit%s, %sexit%s, or Ctrl-D\r\n", dim, reset, bold, reset, bold, reset)
+	if proj != nil && len(proj.Sources) > 0 {
+		total := 0
+		for _, s := range proj.Sources {
+			total += len(s.Commands)
+		}
+		if len(proj.Sources) == 1 {
+			fmt.Fprintf(w, "%s│%s project: %s%s%s (%d command%s)\r\n",
+				dim, reset, bold, proj.Sources[0].Name, reset,
+				total, pluralS(total))
+		} else {
+			fmt.Fprintf(w, "%s│%s project: %d command%s from %d sources\r\n",
+				dim, reset, total, pluralS(total), len(proj.Sources))
+		}
+	}
 	if devProxy != "" {
 		fmt.Fprintf(w, "%s│%s %sdev mode%s — UI proxied from %s\r\n", dim, reset, yellow, reset, devProxy)
 	}
 	fmt.Fprintf(w, "%s└──────────────────┘%s\r\n", dim, reset)
 	qr.Print(crlfWriter{w}, url)
 	fmt.Fprint(w, "\r\n")
+}
+
+func pluralS(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
 }
 
 // installQuitShim writes a tempdir-local `baf-quit` script that signals

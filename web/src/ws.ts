@@ -11,6 +11,30 @@ type OutboundControl =
   | { type: "override-geometry"; cols: number; rows: number }
   | { type: "release-geometry" };
 
+// A single project command as parsed from one of the host's discovered
+// .baf/config.toml files. The host derives `id` from source-root + name
+// + run so React keys stay unique even when two ancestor configs both
+// define the same command shape.
+export interface ProjectCommand {
+  id: string;
+  name: string;
+  run: string;
+  description?: string;
+}
+
+// A single source = one .baf/config.toml on disk. Closer-to-cwd sources
+// come first in Project.sources; $HOME/.baf/config.toml, when not
+// already on the walk path, is appended last with `name: "global"`.
+export interface ProjectSource {
+  root: string;
+  name: string;
+  commands: ProjectCommand[];
+}
+
+export interface Project {
+  sources: ProjectSource[];
+}
+
 // Inbound control messages. The server pushes geometry on connect and
 // whenever the host resizes. history-start / history-end bracket a
 // stretch of binary frames that carry the older scrollback — the client
@@ -18,11 +42,13 @@ type OutboundControl =
 // replay-end signals that the tail+history phase is done; xterm.js's
 // outbound terminal-protocol responses (DA/DSR/DECRPM) are muted while
 // replay is in progress so stale embedded queries don't echo to the PTY.
+// project carries the discovered .baf/config.toml (or null when none).
 export type InboundControl =
   | { type: "geometry"; cols: number; rows: number }
   | { type: "history-start" }
   | { type: "history-end" }
-  | { type: "replay-end" };
+  | { type: "replay-end" }
+  | { type: "project"; project: Project | null };
 
 export type Status = "connecting" | "open" | "closed" | "error";
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
@@ -13,6 +14,9 @@ import (
 	"testing/fstest"
 	"time"
 
+	"github.com/coder/websocket"
+
+	"github.com/rohanthomare/baf/internal/project"
 	"github.com/rohanthomare/baf/internal/pty"
 	"github.com/rohanthomare/baf/internal/tlsgen"
 	"net"
@@ -138,6 +142,123 @@ func TestServerAuthFlow(t *testing.T) {
 		t.Errorf("token replay should fail, got 302")
 	}
 	resp.Body.Close()
+}
+
+// TestProjectFrameOnConnect: after the cookie auth + WS upgrade, the
+// server should push a `project` control frame describing the discovered
+// .baf/config.toml (or null if none). The frame must arrive before the
+// client could meaningfully render its settings sheet, so we read the
+// first few text frames and assert one of them is the project frame.
+func TestProjectFrameOnConnect(t *testing.T) {
+	t.Parallel()
+	sess, err := pty.Start("/bin/sh", nil, 80, 24, nil)
+	if err != nil {
+		t.Fatalf("pty start: %v", err)
+	}
+	defer sess.Close()
+
+	cert, err := tlsgen.LoadOrCreate(t.TempDir(), net.ParseIP("127.0.0.1"))
+	if err != nil {
+		t.Fatalf("tls: %v", err)
+	}
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr := l.Addr().String()
+	_ = l.Close()
+
+	token, _ := NewToken()
+	proj := &project.Project{
+		Sources: []project.Source{
+			{
+				Root: "/tmp/myproj",
+				Name: "myproj",
+				Commands: []project.Command{
+					{ID: "abc12345", Name: "tests", Run: "make test"},
+				},
+			},
+		},
+	}
+	ui := fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("ok")}}
+	s, err := New(Config{
+		BindAddr: addr, TLSCert: cert, Token: token, UIFS: ui,
+		Session: sess, Project: proj,
+	})
+	if err != nil {
+		t.Fatalf("new: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() { _ = s.Run(ctx) }()
+	if err := waitListen(addr, 2*time.Second); err != nil {
+		t.Fatalf("never listened: %v", err)
+	}
+
+	pool := x509.NewCertPool()
+	leaf, _ := x509.ParseCertificate(cert.Certificate[0])
+	pool.AddCert(leaf)
+	tr := &http.Transport{TLSClientConfig: &tls.Config{RootCAs: pool, ServerName: "localhost"}}
+	jar, _ := cookiejar.New(nil)
+	httpClient := &http.Client{Transport: tr, Jar: jar}
+
+	// Auth: GET /?t=<token> — let the redirect run so the cookie sticks.
+	if _, err := httpClient.Get("https://" + addr + "/?t=" + url.QueryEscape(token)); err != nil {
+		t.Fatalf("auth: %v", err)
+	}
+
+	// Dial the WS using the same HTTP client (cookie jar carries auth).
+	dialCtx, dialCancel := context.WithTimeout(ctx, 3*time.Second)
+	defer dialCancel()
+	conn, _, err := websocket.Dial(dialCtx, "wss://"+addr+"/api/ws", &websocket.DialOptions{
+		HTTPClient: httpClient,
+	})
+	if err != nil {
+		t.Fatalf("ws dial: %v", err)
+	}
+	defer conn.Close(websocket.StatusNormalClosure, "test done")
+
+	// Read up to 6 frames; the project frame should arrive in that window
+	// (geometry first, project right after, plus any binary replay).
+	readCtx, readCancel := context.WithTimeout(ctx, 2*time.Second)
+	defer readCancel()
+	var sawProject bool
+	for i := 0; i < 8 && !sawProject; i++ {
+		typ, data, err := conn.Read(readCtx)
+		if err != nil {
+			t.Fatalf("ws read: %v", err)
+		}
+		if typ != websocket.MessageText {
+			continue
+		}
+		var generic struct {
+			Type    string           `json:"type"`
+			Project *project.Project `json:"project"`
+		}
+		if err := json.Unmarshal(data, &generic); err != nil {
+			continue
+		}
+		if generic.Type == "project" {
+			sawProject = true
+			if generic.Project == nil {
+				t.Fatalf("project frame: want non-null, got null")
+			}
+			if len(generic.Project.Sources) != 1 {
+				t.Fatalf("project payload should carry 1 source: %+v", generic.Project)
+			}
+			src := generic.Project.Sources[0]
+			if src.Name != "myproj" || len(src.Commands) != 1 {
+				t.Fatalf("source payload mismatch: %+v", src)
+			}
+			if src.Commands[0].ID != "abc12345" {
+				t.Fatalf("command ID not preserved: %+v", src.Commands[0])
+			}
+		}
+	}
+	if !sawProject {
+		t.Fatalf("project frame never arrived")
+	}
 }
 
 func waitListen(addr string, max time.Duration) error {

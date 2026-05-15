@@ -20,6 +20,7 @@ import {
   markReplayActive,
   markReplayDone,
 } from "./replay-window";
+import { useSessionActions } from "./SessionContext";
 
 const concat = (chunks: Uint8Array[]): Uint8Array => {
   if (chunks.length === 1) return chunks[0];
@@ -39,6 +40,7 @@ const concat = (chunks: Uint8Array[]): Uint8Array => {
 const REPLAY_SAFETY_MS = 2000;
 
 export function useStreamRouter(): void {
+  const sessionActions = useSessionActions();
   useEffect(() => {
     const t = getTransport();
     const xt = getXterm();
@@ -98,6 +100,10 @@ export function useStreamRouter(): void {
         });
         return;
       }
+      if (msg.type === "project") {
+        sessionActions.setProject(msg.project);
+        return;
+      }
     });
 
     const offOutput = t.onOutput((chunk) => {
@@ -116,5 +122,5 @@ export function useStreamRouter(): void {
       if (safety !== null) clearTimeout(safety);
       pending = [];
     };
-  }, []);
+  }, [sessionActions]);
 }

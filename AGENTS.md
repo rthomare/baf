@@ -393,6 +393,58 @@ exit codes and durations is gone. Older scrollback beyond xterm's
 internal buffer (`scrollback: 1000`) is no longer browsable from the
 phone — the replayed history bytes are dropped on arrival.
 
+## 2026-05-13 — `.baf/config.toml` project commands
+
+baf now discovers an optional `.baf/config.toml` by walking upward from
+its cwd. Any `[[command]]` tables in that file show up as a "project
+commands" section at the top of the existing settings panel (the one
+the floating sliders button opens) on the mobile UI. Tapping a command
+sends `run + "\r"` over the existing PTY input channel — there is no
+new server-side execution surface, the user is just having the text
+typed for them.
+
+**Discovery:** `internal/project.Discover(cwd)` walks parent dirs until
+it sees `.baf/config.toml`. First match wins; nothing fancier (no
+merging across $HOME + project). Missing file is non-fatal and silent;
+malformed TOML or missing required fields surface as a stderr line at
+startup, baf still launches with no commands. The walk stops at `/`.
+
+**Wire shape:** new control frame `{"type":"project","project":{...}|null}`
+sent right after `geometry` on WS connect. `null` is the explicit "no
+project" signal so the client can distinguish "not discovered yet" from
+"discovered, zero commands." IDs are sha256[:8] of `name + "\x00" + run`
+so React keys are stable across reconnects without the server tracking
+state.
+
+**UI placement:** **reused the existing settings panel** rather than
+introducing a parallel sheet. The user already had a "settings menu" —
+the sliders/FloatingSettings button — so adding a new gear icon would
+have been redundant. Commands sit above the shortcut-keys grid with a
+small section header; the rest of the panel is unchanged.
+
+**Trust model:** the file gets typed verbatim into your shell. Same
+trust assumption as a `Makefile` or `.envrc`: only run `baf` inside a
+repo whose scripts you'd already be willing to invoke. The README
+calls this out explicitly.
+
+**What we accepted:**
+
+- No hot reload yet. The spec is read once at `baf` startup; editing
+  `config.toml` requires a restart.
+- No `~/.baf/config.toml` global fallback. Project-only for v1; the
+  global path is the obvious follow-up if anyone asks.
+- TOML parsing pulls in `github.com/BurntSushi/toml` — one new dep,
+  well-known, MIT-licensed, single import.
+
+**Alternatives considered:** A separate `<SettingsSheet>` component
+opened by a new gear button in a (new) mode bar — would have given
+project commands a more prominent home but doubled the number of
+settings entry points users have to learn. JSON instead of TOML —
+dep-free but less readable for the kind of small command lists this
+file is meant to hold. A plain-text `key: value` format — minimal
+parser, but no room for future fields like `description` or future
+sections (`[voice]`, `[keybindings]`).
+
 ## 2026-05-13 — Distribution via Homebrew tap (GoReleaser-driven)
 
 A one-time `brew tap rthomare/baf` followed by `brew install baf` is

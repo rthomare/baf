@@ -4,6 +4,7 @@
 
 import { useReducer, useEffect, useMemo, useRef } from "react";
 import { getTransport } from "./transport";
+import type { Project } from "./ws";
 
 export interface SessionState {
   draft: string;
@@ -11,6 +12,9 @@ export interface SessionState {
   historyCursor: number;
   recording: boolean;
   interim: string;
+  // Discovered .baf/config.toml; null when baf was started outside a
+  // project tree. Populated from the server's `project` control frame.
+  project: Project | null;
 }
 
 export type Action =
@@ -20,7 +24,8 @@ export type Action =
   | { type: "commit-accepted"; text: string }
   | { type: "history-step"; dir: -1 | 1 }
   | { type: "set-recording"; on: boolean }
-  | { type: "set-interim"; text: string };
+  | { type: "set-interim"; text: string }
+  | { type: "set-project"; project: Project | null };
 
 const HISTORY_KEY = "baf.history";
 
@@ -48,6 +53,7 @@ export function initialState(): SessionState {
     historyCursor: history.length,
     recording: false,
     interim: "",
+    project: null,
   };
 }
 
@@ -89,6 +95,8 @@ export function reduce(state: SessionState, action: Action): SessionState {
       return { ...state, recording: action.on };
     case "set-interim":
       return { ...state, interim: action.text };
+    case "set-project":
+      return { ...state, project: action.project };
   }
 }
 
@@ -100,6 +108,11 @@ export interface SessionActions {
   historyStep(dir: -1 | 1): void;
   setRecording(on: boolean): void;
   setInterim(text: string): void;
+  setProject(project: Project | null): void;
+  // Send a `.baf/config.toml`-defined command straight to the PTY,
+  // bypassing the composer draft. Appends a carriage return so the
+  // command actually runs.
+  runProjectCommand(run: string): void;
 }
 
 const enc = new TextEncoder();
@@ -135,6 +148,12 @@ export function useSession() {
     historyStep(dir) { dispatch({ type: "history-step", dir }); },
     setRecording(on) { dispatch({ type: "set-recording", on }); },
     setInterim(text) { dispatch({ type: "set-interim", text }); },
+    setProject(project) { dispatch({ type: "set-project", project }); },
+    runProjectCommand(run) {
+      const transport = getTransport();
+      if (run) transport.send(enc.encode(run));
+      transport.send(enc.encode("\r"));
+    },
   }), []);
 
   return { state, actions };

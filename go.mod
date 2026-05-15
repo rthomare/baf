@@ -3,6 +3,7 @@ module github.com/rohanthomare/baf
 go 1.26
 
 require (
+	github.com/BurntSushi/toml v1.6.0 // indirect
 	github.com/coder/websocket v1.8.14 // indirect
 	github.com/creack/pty v1.1.24 // indirect
 	github.com/mdp/qrterminal/v3 v3.2.1 // indirect
