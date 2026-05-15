@@ -175,6 +175,13 @@ body {
         max(env(safe-area-inset-right), 10px)
     )
   );
+  /* A project with lots of commands shouldn't be able to push the
+     panel taller than the viewport — clip and scroll the inner list
+     instead. The 72px margin leaves room for the safe-area inset above
+     the panel and a comfortable gap below. */
+  max-height: calc(100vh - 72px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -208,18 +215,53 @@ body {
   pointer-events: auto;
 }
 
-/* Project commands section. Sits above the keys grid when the host
-   discovered a .baf/config.toml. Visually a vertically-stacked list
-   (since command names are usually longer than key labels) using the
-   same dark chip palette as the keys, but with a name + sublabel
-   composition. */
+/* Project commands area. Sits above the keys grid when one or more
+   .baf/config.toml files were discovered. Contains a (conditional)
+   filter input and one section per source. Visually a vertically-
+   stacked list using the same dark chip palette as the keys, but with
+   a name + sublabel composition. */
 .overflow-project {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
   padding-bottom: 8px;
   margin-bottom: 2px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.overflow-project-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.overflow-project-section + .overflow-project-section {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+.overflow-project-filter input {
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  background: #161616;
+  color: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  font-family: "DM Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease;
+}
+.overflow-project-filter input::placeholder {
+  color: rgba(255, 255, 255, 0.32);
+}
+.overflow-project-filter input:focus {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: #1c1c1c;
 }
 .overflow-section-header {
   display: flex;

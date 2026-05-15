@@ -11,9 +11,10 @@ type OutboundControl =
   | { type: "override-geometry"; cols: number; rows: number }
   | { type: "release-geometry" };
 
-// A single project command as parsed from the host's .baf/config.toml.
-// The host derives `id` deterministically from name+run so React keys
-// stay stable across reconnects.
+// A single project command as parsed from one of the host's discovered
+// .baf/config.toml files. The host derives `id` from source-root + name
+// + run so React keys stay unique even when two ancestor configs both
+// define the same command shape.
 export interface ProjectCommand {
   id: string;
   name: string;
@@ -21,10 +22,17 @@ export interface ProjectCommand {
   description?: string;
 }
 
-export interface Project {
+// A single source = one .baf/config.toml on disk. Closer-to-cwd sources
+// come first in Project.sources; $HOME/.baf/config.toml, when not
+// already on the walk path, is appended last with `name: "global"`.
+export interface ProjectSource {
   root: string;
   name: string;
   commands: ProjectCommand[];
+}
+
+export interface Project {
+  sources: ProjectSource[];
 }
 
 // Inbound control messages. The server pushes geometry on connect and

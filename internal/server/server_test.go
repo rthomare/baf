@@ -170,10 +170,14 @@ func TestProjectFrameOnConnect(t *testing.T) {
 
 	token, _ := NewToken()
 	proj := &project.Project{
-		Root: "/tmp/myproj",
-		Name: "myproj",
-		Commands: []project.Command{
-			{ID: "abc12345", Name: "tests", Run: "make test"},
+		Sources: []project.Source{
+			{
+				Root: "/tmp/myproj",
+				Name: "myproj",
+				Commands: []project.Command{
+					{ID: "abc12345", Name: "tests", Run: "make test"},
+				},
+			},
 		},
 	}
 	ui := fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("ok")}}
@@ -240,11 +244,15 @@ func TestProjectFrameOnConnect(t *testing.T) {
 			if generic.Project == nil {
 				t.Fatalf("project frame: want non-null, got null")
 			}
-			if generic.Project.Name != "myproj" || len(generic.Project.Commands) != 1 {
-				t.Fatalf("project payload mismatch: %+v", generic.Project)
+			if len(generic.Project.Sources) != 1 {
+				t.Fatalf("project payload should carry 1 source: %+v", generic.Project)
 			}
-			if generic.Project.Commands[0].ID != "abc12345" {
-				t.Fatalf("command ID not preserved: %+v", generic.Project.Commands[0])
+			src := generic.Project.Sources[0]
+			if src.Name != "myproj" || len(src.Commands) != 1 {
+				t.Fatalf("source payload mismatch: %+v", src)
+			}
+			if src.Commands[0].ID != "abc12345" {
+				t.Fatalf("command ID not preserved: %+v", src.Commands[0])
 			}
 		}
 	}
